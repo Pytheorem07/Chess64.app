@@ -1570,7 +1570,7 @@ if(_fbReady && _auth){
         <div class="ob-opt" onclick="obSel(this,'firstbot','nova')">&#11088; Nova (Easy)</div>
         <div class="ob-opt sel" onclick="obSel(this,'firstbot','bishop')">&#9815; The Bishop</div>
         <div class="ob-opt" onclick="obSel(this,'firstbot','magnus')">&#128081; Grand Magnus</div>
-        <div class="ob-opt" onclick="obSel(this,'firstbot','stockfish5')">&#9889; Stockfish Lv5</div>
+        <div class="ob-opt" onclick="obSel(this,'firstbot','knight')">&#9822; Sir Knight <small style="opacity:.7">(Medium)</small></div>
       </div>
       <div style="margin:10px 0;text-align:left"><label><input type="checkbox" id="ob-trash" checked> Enable bot trash talk</label></div>
       <button class="btn btn-primary btn-lg" onclick="obNext(2)">Continue &#8594;</button>
@@ -1824,6 +1824,24 @@ if(_fbReady && _auth){
         <button class="tab" onclick="playTab('load');playLoadShowLocal()">📂 Load</button>
       </div>
       <div class="tab-content active" id="ptab-bots">
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px;align-items:center">
+        <span style="font-size:12px;color:var(--text2);font-weight:600">&#9201;</span>
+        <button class="btn btn-ghost btn-sm play-tc-btn" data-tc="60" onclick="playSetTC(this,'60')">1m</button>
+        <button class="btn btn-ghost btn-sm play-tc-btn" data-tc="180" onclick="playSetTC(this,'180')">3m</button>
+        <button class="btn btn-ghost btn-sm play-tc-btn active" data-tc="300" onclick="playSetTC(this,'300')">5m</button>
+        <button class="btn btn-ghost btn-sm play-tc-btn" data-tc="600" onclick="playSetTC(this,'600')">10m</button>
+        <button class="btn btn-ghost btn-sm play-tc-btn" data-tc="900" onclick="playSetTC(this,'900')">15m</button>
+        <button class="btn btn-ghost btn-sm play-tc-btn" data-tc="0" onclick="playSetTC(this,'0')">&#8734;</button>
+        <button class="btn btn-ghost btn-sm" onclick="playTCCustom()" title="Custom time">+</button>
+      </div>
+      <div id="play-tc-custom-row" style="display:none;margin-bottom:7px;gap:6px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:12px;color:var(--text2)">Min:</span>
+        <input id="play-tc-mins" type="number" min="0" max="180" value="5" style="width:44px;padding:3px 5px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px">
+        <span style="font-size:12px;color:var(--text2)">+Inc:</span>
+        <input id="play-tc-inc" type="number" min="0" max="60" value="0" style="width:40px;padding:3px 5px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px">
+        <button class="btn btn-primary btn-sm" style="font-size:11px" onclick="playSetCustomTC()">Set</button>
+        <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="document.getElementById('play-tc-custom-row').style.display='none'">&#10005;</button>
+      </div>
       <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:9px;align-items:center">
         <span style="font-size:12px;color:var(--text2)">Play as:</span>
         <button class="btn btn-ghost btn-sm" id="play-as-w" onclick="setPlayerColor('w')" style="border:2px solid var(--accent)">&#9814; White</button>
@@ -2114,16 +2132,7 @@ if(_fbReady && _auth){
           <div style="margin-top:6px;font-size:11px;color:var(--text2);word-break:break-all" id="op-fen-line"></div>
         </div>
         <div style="flex:1;min-width:250px">
-          <div class="flex" style="margin-bottom:7px">
-            <select id="op-db-select" onchange="fetchOpExpl()" style="flex:1"><option value="masters">Masters DB</option><option value="lichess">Lichess DB</option></select>
-            <span class="spinner" id="op-spinner" style="display:none;margin-left:6px"></span>
-          </div>
-          <div style="font-size:11px;color:var(--text2);padding:4px 8px;background:var(--bg2);border-radius:5px;margin-bottom:8px;">
-            ⚠️ We're having some trouble setting up this feature — expect inconsistent service. Live data requires internet access.
-          </div>
           <div id="op-moves-list" style="margin-bottom:14px"></div>
-          <div class="flex-between" style="margin-bottom:7px"><h3>Top Games</h3><button class="btn btn-ghost btn-sm" onclick="fetchOpGames(true)">Load Games</button></div>
-          <div id="op-games-list"></div>
         </div>
       </div>
     </div>
@@ -10446,7 +10455,10 @@ function printBoard(){
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
         <div id="fb-profile-pic" style="width:56px;height:56px;border-radius:50%;overflow:hidden;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0">👤</div>
         <div>
-          <div id="fb-profile-name" style="font-weight:800;font-size:16px"></div>
+          <div style="display:flex;align-items:center;gap:5px">
+            <div id="fb-profile-name" style="font-weight:800;font-size:16px"></div>
+            <button id="fb-rename-btn" onclick="fbShowRenameForm()" style="display:none;background:none;border:none;color:var(--accent);cursor:pointer;font-size:11px;padding:0 2px" title="Change username">&#9999;&#65039;</button>
+          </div>
           <div id="fb-profile-email" style="font-size:12px;color:var(--text2)"></div>
           <div id="fb-profile-badge" style="margin-top:3px"></div>
         </div>
@@ -10464,6 +10476,7 @@ function printBoard(){
           <button class="fb-tab" id="adm-tab-articles" onclick="admTab('articles')" style="flex:none;padding:5px 10px;font-size:11px">📰 Articles</button>
           <button class="fb-tab" id="adm-tab-broadcast" onclick="admTab('broadcast')" style="flex:none;padding:5px 10px;font-size:11px">📢 Broadcast</button>
           <button class="fb-tab" id="adm-tab-requests" onclick="admTab('requests')" style="flex:none;padding:5px 10px;font-size:11px">✍️ Requests</button>
+          <button class="fb-tab" id="adm-tab-usernames" onclick="admTab('usernames')" style="flex:none;padding:5px 10px;font-size:11px">&#128100; Usernames</button>
           <button class="fb-tab" id="adm-tab-reports" onclick="admTab('reports')" style="flex:none;padding:5px 10px;font-size:11px">🚩 Reports</button>
         </div>
         <!-- analytics tab -->
@@ -10488,6 +10501,15 @@ function printBoard(){
         </div>
         <!-- broadcast tab -->
         <div id="adm-pane-broadcast" style="display:none">
+          <div style="background:var(--bg3);border-radius:8px;padding:10px;margin-bottom:12px">
+            <div style="font-weight:700;font-size:13px;margin-bottom:5px">&#127918; Live Games on Home Page</div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <div id="adm-livegames-toggle" style="width:40px;height:22px;border-radius:11px;background:var(--accent);cursor:pointer;position:relative;transition:background .2s" onclick="admToggleLiveGames(this)"><div id="adm-livegames-knob" style="position:absolute;top:3px;left:21px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s"></div></div>
+              <span id="adm-livegames-label" style="font-size:12px;color:var(--text2)">Live Games: ON</span>
+              <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="admLoadLiveGamesState()">&#128260;</button>
+            </div>
+          </div>
+
           <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Message shown to all signed-in users when they open their account panel.</p>
           <textarea id="adm-broadcast-msg" placeholder="Type your announcement…" rows="3"
             style="width:100%;padding:9px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;resize:vertical;box-sizing:border-box;margin-bottom:8px"></textarea>
@@ -10499,6 +10521,10 @@ function printBoard(){
           <div id="adm-requests-list" style="max-height:340px;overflow-y:auto;font-size:12px">
             <p style="color:var(--text2)">Click above to see pending blogger applications.</p>
           </div>
+        </div>
+        <div id="adm-pane-usernames" style="display:none">
+          <button class="btn btn-primary btn-sm" onclick="admLoadUsernameRequests()" style="margin-bottom:8px">&#128260; Load Requests</button>
+          <div id="adm-username-requests-list" style="max-height:320px;overflow-y:auto;font-size:12px"><p style="color:var(--text2)">Click Load to see pending requests.</p></div>
         </div>
         <div id="adm-pane-reports" style="display:none">
           <button class="btn btn-primary btn-sm" onclick="admLoadReports()" style="margin-bottom:8px">🔄 Load Reports</button>
@@ -11197,13 +11223,14 @@ service cloud.firestore {
       <h1 style="margin:0 0 4px">📰 Chess Articles</h1>
       <p style="margin:0;color:var(--text2);font-size:13px">Chess strategy, annotated games, and insights from our community</p>
     </div>
-    <div style="display:flex;gap:8px;align-items:center">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <div id="art-write-btn-wrap" style="display:none">
         <button class="btn btn-primary" onclick="artOpenEditor(null)">✍️ Write Article</button>
       </div>
       <div id="art-drafts-btn-wrap" style="display:none">
         <button class="btn btn-ghost btn-sm" onclick="artLoadDrafts()">📁 My Drafts</button>
       </div>
+      <button id="art-apply-blogger-btn" class="btn btn-ghost btn-sm" onclick="artShowApplyForm()" style="font-size:12px">✍️ Become a Blogger</button>
     </div>
   </div>
 
@@ -11745,10 +11772,10 @@ function artPreview(){
       <p style="color:var(--text2);margin-bottom:14px;font-size:13px">Chess64 is made possible by these incredible open-source projects and APIs:</p>
       <div style="display:grid;gap:10px">
         <div style="display:flex;align-items:flex-start;gap:12px;padding:10px;background:var(--bg3);border-radius:8px"><div style="font-size:28px;flex-shrink:0">&#9889;</div><div><div style="font-weight:700"><a href="https://stockfishchess.org" target="_blank">Stockfish</a></div><div style="font-size:12px;color:var(--text2)">The world's strongest open-source chess engine, used for analysis, AI opponents, and position evaluation.</div></div></div>
-        <div style="display:flex;align-items:flex-start;gap:12px;padding:10px;background:var(--bg3);border-radius:8px"><div style="font-size:28px;flex-shrink:0">&#128075;</div><div><div style="font-weight:700"><a href="https://lichess.org" target="_blank">Lichess</a></div><div style="font-size:12px;color:var(--text2)">Free and open-source chess platform. Provides puzzles, opening explorer database, live broadcast data, and daily puzzles through their public API. Lichess is truly amazing.</div></div></div>
+        <div style="display:flex;align-items:flex-start;gap:12px;padding:10px;background:var(--bg3);border-radius:8px"><div style="font-size:28px;flex-shrink:0">&#128075;</div><div><div style="font-weight:700"><a href="https://lichess.org" target="_blank">Lichess</a></div><div style="font-size:12px;color:var(--text2)">Free and open-source chess platform. Chess64 uses Lichess's public broadcast API to display upcoming and live chess events on the Events page. Lichess is truly amazing.</div></div></div>
         <div style="display:flex;align-items:flex-start;gap:12px;padding:10px;background:var(--bg3);border-radius:8px"><div style="font-size:28px;flex-shrink:0">&#9812;</div><div><div style="font-weight:700"><a href="https://chess.com" target="_blank">Chess.com</a></div><div style="font-size:12px;color:var(--text2)">Player profiles, ratings, leaderboards, and game archives provided through the Chess.com public API.</div></div></div>
         <div style="display:flex;align-items:flex-start;gap:12px;padding:10px;background:var(--bg3);border-radius:8px"><div style="font-size:28px;flex-shrink:0">&#128247;</div><div><div style="font-weight:700"><a href="https://commons.wikimedia.org/wiki/Category:SVG_chess_pieces" target="_blank">Wikimedia Commons / CBurnett</a></div><div style="font-size:12px;color:var(--text2)">The beautiful chess piece images are the CBurnett piece set, released under Creative Commons license by Colin M.L. Burnett.</div></div></div>
-        <div style="display:flex;align-items:flex-start;gap:12px;padding:10px;background:var(--bg3);border-radius:8px"><div style="font-size:28px;flex-shrink:0">&#128205;</div><div><div style="font-weight:700"><a href="https://explorer.lichess.ovh" target="_blank">Lichess Opening Explorer API</a></div><div style="font-size:12px;color:var(--text2)">Master games database and Lichess player statistics powering the opening explorer feature.</div></div></div>
+        
       </div>
     </div>
     <div class="card section" style="text-align:center">
@@ -11756,7 +11783,7 @@ function artPreview(){
       <p style="color:var(--text2);font-size:13px;margin:8px 0 14px">The best way to support Chess64 is to share it with fellow chess players and send feedback!</p>
       <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
         <button class="btn btn-primary" onclick="navTo('feedback')">&#128172; Send Feedback</button>
-        <button class="btn btn-ghost" onclick="try{navigator.share({title:'Chess64',url:'https://chess64.app',text:'Free chess with AI bots, puzzles, and analysis'})}catch(e){navigator.clipboard.writeText('https://chess64.app').then(()=>alert('Link copied!'))}">&#128279; Share Chess64</button>
+        <button class="btn btn-ghost" onclick="try{navigator.share({title:'Chess64',url:'https://pytheorem07.github.io/Chess64.app/',text:'Free chess with AI bots, puzzles, and analysis'})}catch(e){navigator.clipboard.writeText('https://chess64.app').then(()=>alert('Link copied!'))}">&#128279; Share Chess64</button>
       </div>
     </div>
   </div>
@@ -13445,7 +13472,7 @@ setTimeout(()=>{
       const note = document.createElement('div');
       note.className='lichess-note';
       note.style.cssText='font-size:10px;color:var(--text2);padding:4px 0 6px;opacity:0.8';
-      note.innerHTML='ℹ️ Lichess opening book may be inconsistent (network dependent)';
+      // Lichess note removed
       explorerTab.insertBefore(note, explorerTab.firstChild);
     }
   }, 600);
@@ -16255,6 +16282,404 @@ function _loadGameToAnalysis(pgn){
   window.playTab=function(tab){
     if(_orig) _orig(tab);
     if(tab==='load') setTimeout(playLoadShowLocal,50);
+  };
+})();
+</script>
+
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   CHESS64 — TC Buttons · Events API · Live Games · Usernames
+   ═══════════════════════════════════════════════════════════ */
+
+// ── TIME CONTROL BUTTONS (play page) ─────────────────────────────
+function playSetTC(btn, val){
+  document.querySelectorAll('.play-tc-btn').forEach(function(b){ b.classList.remove('active'); });
+  if(btn) btn.classList.add('active');
+  var cr = document.getElementById('play-tc-custom-row');
+  if(cr) cr.style.display='none';
+  var sel = document.getElementById('st-tc');
+  if(sel){
+    var found = Array.from(sel.options).find(function(o){ return o.value===val; });
+    if(!found){
+      var opt=document.createElement('option'); opt.value=val; opt.id='_tmptc';
+      opt.text=val==='0'?'Unlimited':Math.round(val/60)+'m';
+      var old=document.getElementById('_tmptc'); if(old) sel.removeChild(old);
+      sel.appendChild(opt);
+    }
+    sel.value=val;
+  }
+  if(typeof saveSt==='function') saveSt();
+}
+function playTCCustom(){
+  var cr=document.getElementById('play-tc-custom-row');
+  if(cr) cr.style.display='flex';
+}
+function playSetCustomTC(){
+  var mins=parseInt(document.getElementById('play-tc-mins')?.value||'5');
+  var inc=parseInt(document.getElementById('play-tc-inc')?.value||'0');
+  var val=inc>0?(mins*60)+'+'+inc:String(mins*60);
+  var sel=document.getElementById('st-tc');
+  if(sel){
+    var opt=document.createElement('option'); opt.value=val; opt.id='_tmptc';
+    opt.text=mins+'m'+(inc>0?'+'+inc+'s':'');
+    var old=document.getElementById('_tmptc'); if(old) sel.removeChild(old);
+    sel.appendChild(opt); sel.value=val;
+  }
+  document.querySelectorAll('.play-tc-btn').forEach(function(b){ b.classList.remove('active'); });
+  var cr=document.getElementById('play-tc-custom-row'); if(cr) cr.style.display='none';
+  if(typeof saveSt==='function') saveSt();
+  if(typeof showToast==='function') showToast('Time control: '+mins+'m'+(inc>0?'+'+inc+'s':''));
+}
+
+// ── EVENTS: LICHESS BROADCAST API ────────────────────────────────
+var _evCurTab='upcoming';
+function evTab(id){
+  _evCurTab=id;
+  document.querySelectorAll('#ev-tabs .tab').forEach(function(t){
+    t.classList.toggle('active',(t.getAttribute('onclick')||'').indexOf("'"+id+"'")>-1);
+  });
+  evLoad();
+}
+async function evLoad(){
+  var el=document.getElementById('events-content'); if(!el) return;
+  el.innerHTML='<div style="color:var(--text2);padding:20px;text-align:center">&#8987; Loading events from Lichess&#8230;</div>';
+  try{
+    var r=await fetch('https://lichess.org/api/broadcast?nb=30',{headers:{'Accept':'application/x-ndjson'}});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    var text=await r.text();
+    var all=text.trim().split('\n').filter(Boolean).map(function(l){try{return JSON.parse(l);}catch(e){return null;}}).filter(Boolean);
+    var now=Date.now();
+    var upcoming=all.filter(function(e){return (e.rounds||[]).some(function(rnd){return rnd.startsAt&&rnd.startsAt>now;});});
+    var recent=all.filter(function(e){return upcoming.indexOf(e)===-1;});
+    var evs=_evCurTab==='upcoming'?upcoming:recent;
+    if(!evs.length){el.innerHTML='<p style="color:var(--text2);padding:16px">No '+_evCurTab+' events found.</p>';return;}
+    el.innerHTML=evs.map(function(e){
+      var tour=e.tour||{}; var rounds=e.rounds||[];
+      var name=tour.name||e.name||'Event'; var desc=tour.description||''; var img=tour.image||'';
+      var nxt=rounds.filter(function(r){return r.startsAt&&r.startsAt>now;}).sort(function(a,b){return a.startsAt-b.startsAt;})[0];
+      var lat=rounds.filter(function(r){return r.startsAt&&r.startsAt<=now;}).sort(function(a,b){return b.startsAt-a.startsAt;})[0];
+      var rnd=nxt||lat; var ds='';
+      if(rnd&&rnd.startsAt){var d=new Date(rnd.startsAt);ds=d.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'})+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
+      var url='https://lichess.org/broadcast/'+(tour.slug||'')+'/'+(tour.id||'');
+      return '<div class="card" style="padding:14px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start">'
+        +(img?'<img src="'+img+'" style="width:60px;height:60px;object-fit:cover;border-radius:8px;flex-shrink:0" onerror="this.style.display=\'none\'">':'<div style="width:60px;height:60px;background:var(--bg3);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0">&#9820;</div>')
+        +'<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14px;margin-bottom:3px">'+name.replace(/</g,'&lt;')+'</div>'
+        +(desc?'<div style="font-size:11px;color:var(--text2);margin-bottom:4px">'+desc.slice(0,120).replace(/</g,'&lt;')+(desc.length>120?'&hellip;':'')+'</div>':'')
+        +(ds?'<div style="font-size:11px;color:var(--accent);margin-bottom:5px">&#128197; '+ds+'</div>':'')
+        +'<a href="'+url+'" target="_blank" rel="noopener" style="font-size:11px;color:var(--accent)">Watch on Lichess &rarr;</a></div></div>';
+    }).join('');
+  }catch(e){
+    el.innerHTML='<div style="text-align:center;padding:20px;color:var(--text2)">&#9888;&#65039; Could not load events. Check your connection.<br><button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="evLoad()">Retry</button></div>';
+  }
+}
+// Load events on navigate
+(function(){var _o=window.navTo;window.navTo=function(p){if(_o)_o(p);if(p==='events')setTimeout(evLoad,100);};})();
+
+// ── LIVE GAMES + RECENT GAMES ON HOME PAGE ────────────────────────
+var _liveGamesEnabled=true;
+async function liveGamesLoad(){
+  var el=document.getElementById('home-live-games-list'); if(!el) return;
+  try{
+    // First try active games
+    var r=await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents:runQuery?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({structuredQuery:{from:[{collectionId:'onlineGames'}],
+        where:{fieldFilter:{field:{fieldPath:'status'},op:'EQUAL',value:{stringValue:'active'}}},
+        orderBy:[{field:{fieldPath:'createdAt'},direction:'DESCENDING'}],limit:6}})
+    });
+    var docs=await r.json();
+    var games=(Array.isArray(docs)?docs:[docs]).filter(function(d){return d.document;}).map(function(d){
+      var f=d.document.fields||{};
+      var g=function(k){var v=f[k];return v?(v.stringValue||v.integerValue||''):'';}; 
+      return {id:d.document.name.split('/').pop(),whiteName:g('whiteName'),blackName:g('blackName'),
+              wTime:parseInt(g('wTime')||0),bTime:parseInt(g('bTime')||0),status:g('status'),result:g('result')};
+    });
+    
+    if(games.length){
+      // Show live games
+      document.getElementById('home-live-games-title').textContent='&#127918; Live Games';
+      var fmt=function(s){return Math.floor(s/60)+':'+(s%60<10?'0':'')+s%60;};
+      el.innerHTML=games.map(function(g){
+        return '<div style="padding:8px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px">'
+          +'<div style="font-size:12px;font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+          +g.whiteName.replace(/</g,'&lt;')+' <span style="color:var(--text2);font-weight:400">vs</span> '+g.blackName.replace(/</g,'&lt;')+'</div>'
+          +'<div style="display:flex;gap:4px;font-size:11px;font-family:monospace;flex-shrink:0">'
+          +'<span style="background:var(--bg3);padding:2px 6px;border-radius:4px">&#9643; '+fmt(g.wTime)+'</span>'
+          +'<span style="background:#1a1a1a;color:#eee;padding:2px 6px;border-radius:4px;border:1px solid var(--border)">&#9642; '+fmt(g.bTime)+'</span>'
+          +'</div></div>';
+      }).join('')+'<div style="text-align:center;padding:6px"><a href="#" onclick="navTo(\'online\');return false" style="font-size:11px;color:var(--accent)">Play Online &#8594;</a></div>';
+    } else {
+      // No live games — show recent finished games
+      document.getElementById('home-live-games-title').innerHTML='&#9812; Recent Games';
+      var r2=await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents:runQuery?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({structuredQuery:{from:[{collectionId:'onlineGames'}],
+          where:{fieldFilter:{field:{fieldPath:'status'},op:'EQUAL',value:{stringValue:'finished'}}},
+          orderBy:[{field:{fieldPath:'createdAt'},direction:'DESCENDING'}],limit:5}})
+      });
+      var docs2=await r2.json();
+      var recent=(Array.isArray(docs2)?docs2:[docs2]).filter(function(d){return d.document;}).map(function(d){
+        var f=d.document.fields||{};
+        var g=function(k){var v=f[k];return v?(v.stringValue||v.integerValue||''):'';}; 
+        return {whiteName:g('whiteName'),blackName:g('blackName'),result:g('result'),tc:g('timeControl')};
+      });
+      if(!recent.length){
+        el.innerHTML='<div style="color:var(--text2);font-size:12px;text-align:center;padding:12px">No games yet. <a href="#" onclick="navTo(\'online\');return false" style="color:var(--accent)">Be the first!</a></div>';
+        return;
+      }
+      el.innerHTML=recent.map(function(g){
+        var resColor=g.result==='1-0'?'#4ade80':g.result==='0-1'?'#f87171':'#facc15';
+        return '<div style="padding:7px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:6px">'
+          +'<div style="font-size:12px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+          +g.whiteName.replace(/</g,'&lt;')+' vs '+g.blackName.replace(/</g,'&lt;')+'</div>'
+          +'<span style="font-size:11px;font-weight:700;color:'+resColor+';flex-shrink:0">'+g.result+'</span>'
+          +'</div>';
+      }).join('')+'<div style="text-align:center;padding:6px"><a href="#" onclick="navTo(\'online\');return false" style="font-size:11px;color:var(--accent)">Play Online &#8594;</a></div>';
+    }
+  }catch(e){
+    el.innerHTML='<div style="color:var(--text2);font-size:12px;padding:8px;text-align:center">Games unavailable.</div>';
+  }
+}
+
+async function liveGamesInit(){
+  if(window.location.protocol==='file:') return;
+  try{
+    var r=await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/siteSettings/liveGames?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q');
+    if(r.ok){var d=await r.json(); if(d.fields&&d.fields.disabled&&d.fields.disabled.booleanValue===true){var sec=document.getElementById('home-live-games');if(sec)sec.style.display='none';return;}}
+  }catch(e){}
+  liveGamesLoad();
+}
+
+// Inject live games section into home page
+(function injectLiveGames(){
+  if(document.getElementById('home-live-games')) return;
+  var feed=document.getElementById('home-articles-feed');
+  if(!feed){setTimeout(injectLiveGames,600);return;}
+  var sec=document.createElement('div');
+  sec.id='home-live-games';
+  sec.style.cssText='max-width:960px;margin:16px auto 0;padding:0 12px';
+  sec.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+    +'<div id="home-live-games-title" style="font-weight:700;font-size:15px">&#127918; Live Games</div>'
+    +'<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="liveGamesLoad()">&#128260;</button>'
+    +'</div>'
+    +'<div class="card" style="padding:0;overflow:hidden"><div id="home-live-games-list"><div style="color:var(--text2);font-size:12px;text-align:center;padding:12px">Loading&#8230;</div></div></div>';
+  feed.parentNode.insertBefore(sec,feed);
+  setTimeout(liveGamesInit,500);
+})();
+(function(){var _o=window.navTo;window.navTo=function(p){if(_o)_o(p);if(p==='home')setTimeout(liveGamesInit,400);};})();
+setInterval(function(){if(typeof curPage!=='undefined'&&curPage==='home')liveGamesLoad();},30000);
+
+// Admin live games toggle
+async function admLoadLiveGamesState(){
+  try{
+    var r=await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/siteSettings/liveGames?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q');
+    var d=await r.json();
+    var dis=d.fields&&d.fields.disabled&&d.fields.disabled.booleanValue===true;
+    var tog=document.getElementById('adm-livegames-toggle');
+    var knob=document.getElementById('adm-livegames-knob');
+    var lbl=document.getElementById('adm-livegames-label');
+    if(tog) tog.style.background=dis?'#555':'var(--accent)';
+    if(knob) knob.style.left=dis?'3px':'21px';
+    if(lbl) lbl.textContent='Live Games: '+(dis?'OFF':'ON');
+  }catch(e){}
+}
+async function admToggleLiveGames(el){
+  var isOn=el.style.background.indexOf('accent')>-1||el.style.background==='var(--accent)';
+  var nowDis=isOn;
+  try{
+    var tok=await window._fb.user.getIdToken();
+    await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/siteSettings/liveGames?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
+      method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+      body:JSON.stringify({fields:{disabled:{booleanValue:nowDis}}})
+    });
+    el.style.background=nowDis?'#555':'var(--accent)';
+    var knob=document.getElementById('adm-livegames-knob'); if(knob) knob.style.left=nowDis?'3px':'21px';
+    var lbl=document.getElementById('adm-livegames-label'); if(lbl) lbl.textContent='Live Games: '+(nowDis?'OFF':'ON');
+    if(typeof showToast==='function') showToast('Live games '+(nowDis?'disabled':'enabled'));
+  }catch(e){if(typeof showToast==='function') showToast('Error: '+e.message);}
+}
+(function(){var _o=window.admTab;window.admTab=function(t){if(_o)_o(t);if(t==='broadcast')setTimeout(admLoadLiveGamesState,200);};})();
+
+// ── USERNAME RENAME ───────────────────────────────────────────────
+// Show/hide rename button based on auth state
+(function(){
+  var _o=window._onFbAuthChange;
+  window._onFbAuthChange=function(user,isAdmin){
+    if(_o) _o(user,isAdmin);
+    var btn=document.getElementById('fb-rename-btn');
+    if(btn) btn.style.display=(user&&!user.isAnonymous)?'inline':'none';
+    // Notify if admin approved rename
+    if(user&&!user.isAnonymous){
+      setTimeout(async function(){
+        try{
+          var r=await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+user.uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q');
+          var d=await r.json();
+          if(d.fields&&d.fields.usernameChangeAllowed&&d.fields.usernameChangeAllowed.booleanValue){
+            var n=d.fields.approvedUsername?d.fields.approvedUsername.stringValue:'';
+            if(typeof showToast==='function') showToast('Admin approved your rename'+(n?' to "'+n+'"':'')+'! Click the &#9999; pencil to apply it.');
+          }
+        }catch(e){}
+      },2000);
+    }
+  };
+})();
+
+function fbShowRenameForm(){
+  var existing=document.getElementById('fb-rename-form');
+  if(existing){existing.style.display=existing.style.display==='none'?'block':'none';return;}
+  var container=document.getElementById('fb-profile-name').closest('div').parentNode;
+  var form=document.createElement('div');
+  form.id='fb-rename-form';
+  form.style.cssText='margin-top:10px;background:var(--bg3);border-radius:8px;padding:10px';
+  form.innerHTML='<div id="fb-rename-info" style="font-size:11px;color:var(--text2);margin-bottom:6px">Checking rename eligibility&hellip;</div>'
+    +'<input id="fb-rename-inp" type="text" maxlength="30" placeholder="New username&hellip;" '
+    +'style="width:100%;padding:6px 9px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;margin-bottom:6px">'
+    +'<div id="fb-rename-err" style="color:var(--red);font-size:11px;margin-bottom:5px;display:none"></div>'
+    +'<div style="display:flex;gap:6px">'
+    +'<button class="btn btn-primary btn-sm" onclick="fbSubmitRename()">Save</button>'
+    +'<button class="btn btn-ghost btn-sm" onclick="document.getElementById(\'fb-rename-form\').style.display=\'none\'">Cancel</button>'
+    +'</div>';
+  container.appendChild(form);
+  _fbCheckRenameStatus();
+}
+
+async function _fbCheckRenameStatus(){
+  var info=document.getElementById('fb-rename-info'); if(!info) return;
+  try{
+    var u=window._fb&&window._fb.user; if(!u) return;
+    var r=await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+u.uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q');
+    var d=await r.json();
+    var usedFree=d.fields&&d.fields.usedFreeRename&&d.fields.usedFreeRename.booleanValue===true;
+    var adminOk=d.fields&&d.fields.usernameChangeAllowed&&d.fields.usernameChangeAllowed.booleanValue===true;
+    var approved=d.fields&&d.fields.approvedUsername&&d.fields.approvedUsername.stringValue||'';
+    window._renameState={usedFree,adminOk,approved};
+    if(!usedFree) info.textContent='&#10003; You have one free username change.';
+    else if(adminOk) info.textContent='&#10003; Admin approved: you can change to "'+(approved||'your chosen name')+'".';
+    else info.textContent='Free rename used. Submitting will send a request to admin for approval.';
+  }catch(e){
+    if(info) info.textContent='One free rename available.';
+    window._renameState={usedFree:false,adminOk:false,approved:''};
+  }
+}
+
+async function fbSubmitRename(){
+  var inp=document.getElementById('fb-rename-inp');
+  var err=document.getElementById('fb-rename-err');
+  if(!inp) return;
+  var name=inp.value.trim();
+  if(!name||name.length<2){if(err){err.textContent='At least 2 characters required.';err.style.display='block';}return;}
+  if(name.length>30){if(err){err.textContent='Max 30 characters.';err.style.display='block';}return;}
+  if(!/^[a-zA-Z0-9_\- ]+$/.test(name)){if(err){err.textContent='Letters, numbers, spaces, _ and - only.';err.style.display='block';}return;}
+  if(err) err.style.display='none';
+  var btn=document.querySelector('[onclick="fbSubmitRename()"]');
+  if(btn){btn.disabled=true;btn.textContent='Saving&hellip;';}
+  var state=window._renameState||{usedFree:false,adminOk:false};
+  try{
+    var u=window._fb&&window._fb.user; if(!u) throw new Error('Not signed in');
+    if(!state.usedFree||state.adminOk){
+      // Apply directly
+      var tok=await u.getIdToken();
+      var r=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:update?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({idToken:tok,displayName:name,returnSecureToken:true})
+      });
+      if(!r.ok) throw new Error('Auth update failed');
+      await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+u.uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=displayName&updateMask.fieldPaths=usedFreeRename&updateMask.fieldPaths=usernameChangeAllowed',{
+        method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+        body:JSON.stringify({fields:{displayName:{stringValue:name},usedFreeRename:{booleanValue:true},usernameChangeAllowed:{booleanValue:false}}})
+      });
+      await u.reload();
+      var ne=document.getElementById('fb-profile-name'); if(ne) ne.textContent=name;
+      document.getElementById('fb-rename-form').style.display='none';
+      if(typeof showToast==='function') showToast('Username updated to "'+name+'"!');
+    } else {
+      // Submit request
+      var tok2=await u.getIdToken();
+      await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/usernameRequests/'+u.uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
+        method:'PATCH',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({fields:{uid:{stringValue:u.uid},currentName:{stringValue:u.displayName||''},requestedName:{stringValue:name},status:{stringValue:'pending'},createdAt:{timestampValue:new Date().toISOString()}}})
+      });
+      document.getElementById('fb-rename-form').style.display='none';
+      if(typeof showToast==='function') showToast('Request sent to admin for approval!');
+    }
+  }catch(e){
+    if(err){err.textContent=e.message||'Something went wrong.';err.style.display='block';}
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='Save';}
+  }
+}
+
+// Admin: username requests
+async function admLoadUsernameRequests(){
+  var el=document.getElementById('adm-username-requests-list'); if(!el) return;
+  el.innerHTML='<div style="color:var(--text2)">Loading...</div>';
+  try{
+    var r=await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/usernameRequests?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q');
+    var d=await r.json();
+    var docs=(d.documents||[]).filter(function(doc){return doc.fields&&doc.fields.status&&doc.fields.status.stringValue==='pending';});
+    if(!docs.length){el.innerHTML='<p style="color:var(--text2)">No pending requests.</p>';return;}
+    var html='';
+    docs.forEach(function(doc){
+      var f=doc.fields||{};
+      var uid=f.uid?f.uid.stringValue:'';
+      var cur=f.currentName?f.currentName.stringValue:'?';
+      var req=f.requestedName?f.requestedName.stringValue:'?';
+      var date=f.createdAt?new Date(f.createdAt.timestampValue).toLocaleDateString():'';
+      var safeReq=req.replace(/"/g,'&quot;').replace(/</g,'&lt;');
+      html+='<div style="padding:8px;border-bottom:1px solid var(--border)">';
+      html+='<div style="font-weight:600;font-size:12px">'+cur.replace(/</g,'&lt;')+' &rarr; <span style="color:var(--accent)">'+req.replace(/</g,'&lt;')+'</span></div>';
+      html+='<div style="font-size:11px;color:var(--text2);margin-bottom:5px">'+date+'</div>';
+      html+='<div style="display:flex;gap:5px">';
+      html+='<button class="btn btn-primary btn-sm" style="font-size:10px" data-uid="'+uid+'" data-name="'+safeReq+'" onclick="admApproveRename(this)">&#10003; Approve</button>';
+      html+='<button class="btn btn-ghost btn-sm" style="font-size:10px;color:var(--red)" data-uid="'+uid+'" onclick="admDenyRename(this)">&#10005; Deny</button>';
+      html+='</div></div>';
+    });
+    el.innerHTML=html;
+  }catch(e){el.innerHTML='<p style="color:var(--red)">'+e.message+'</p>';}
+}
+async function admApproveRename(el){
+  var uid=el.dataset.uid; var name=el.dataset.name||el.getAttribute('data-name');
+  if(!confirm('Approve change to "'+name+'"?')) return;
+  try{
+    var tok=await window._fb.user.getIdToken();
+    await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=usernameChangeAllowed&updateMask.fieldPaths=approvedUsername',{
+      method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+      body:JSON.stringify({fields:{usernameChangeAllowed:{booleanValue:true},approvedUsername:{stringValue:name}}})
+    });
+    await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/usernameRequests/'+uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=status',{
+      method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+      body:JSON.stringify({fields:{status:{stringValue:'approved'}}})
+    });
+    if(typeof showToast==='function') showToast('Approved! User will see it on next sign-in.');
+    admLoadUsernameRequests();
+  }catch(e){if(typeof showToast==='function') showToast('Error: '+e.message);}
+}
+async function admDenyRename(el){
+  var uid=el.dataset.uid;
+  if(!confirm('Deny this request?')) return;
+  try{
+    var tok=await window._fb.user.getIdToken();
+    await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/usernameRequests/'+uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=status',{
+      method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+      body:JSON.stringify({fields:{status:{stringValue:'denied'}}})
+    });
+    if(typeof showToast==='function') showToast('Request denied.');
+    admLoadUsernameRequests();
+  }catch(e){if(typeof showToast==='function') showToast('Error: '+e.message);}
+}
+// Patch admTab for new panes
+(function(){
+  var _o=window.admTab;
+  window.admTab=function(t){
+    ['analytics','users','articles','broadcast','requests','reports','usernames'].forEach(function(tab){
+      var b=document.getElementById('adm-tab-'+tab); var p=document.getElementById('adm-pane-'+tab);
+      if(b) b.classList.toggle('active',t===tab);
+      if(p) p.style.display=(t===tab)?'block':'none';
+    });
+    if(t==='usernames') admLoadUsernameRequests();
+    else if(t==='requests'&&typeof admLoadBloggerRequests==='function') admLoadBloggerRequests();
+    else if(_o&&t!=='usernames'&&t!=='requests') _o(t);
   };
 })();
 </script>
