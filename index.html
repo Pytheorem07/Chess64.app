@@ -956,7 +956,7 @@ window._fb = {
     const snap = await getDoc(doc(_db,'onlineGames',gameId));
     return snap.exists()?{id:snap.id,...snap.data()}:null;
   },
-  async submitOnlineMove(gameId, moveUci, newFen, wTime, bTime){
+  async submitOnlineMove(gameId, moveUci, newFen, wTime, bTime, moveSan){
     if(!_fbUser||!_db) return;
     const gRef = doc(_db,'onlineGames',gameId);
     const snap = await getDoc(gRef);
@@ -970,6 +970,7 @@ window._fb = {
     await updateDoc(gRef,{
       fen: newFen,
       moves: [...(g.moves||[]), moveUci],
+      sanMoves: [...(g.sanMoves||[]), moveSan||moveUci],
       turn: newTurn,
       wTime, bTime,
       lastMoveAt: serverTimestamp()
@@ -2262,7 +2263,7 @@ if(_fbReady && _auth){
     <div class="section"><div class="card"><h3>&#127912; Appearance</h3>
       <div class="setting-row"><span>App Theme</span><select id="st-apptheme" onchange="setAppTheme(this.value)"><option value="dark">&#127761; Dark</option><option value="light">&#9728;&#65039; Light</option></select></div>
       <div class="setting-row"><span>Piece Style</span><select id="piece-set-select" onchange="setPieceSet(this.value)" style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px"><option value="cburnett">Cburnett</option><option value="merida">Merida</option><option value="alpha">Alpha</option><option value="maestro">Maestro</option><option value="pirouetti">Pirouetti</option><option value="chessnut">Chessnut</option><option value="fantasy">Fantasy</option><option value="spatial">Spatial</option><option value="tatiana">Tatiana</option><option value="wikipedia">Classic</option></select></div>
-      <div style="font-size:11px;color:var(--text2);padding:2px 0 8px 4px;">⏳ Non-default piece sets load from Lichess — may take a moment or require internet access.</div>
+      <div style="font-size:11px;color:var(--text2);padding:2px 0 8px 4px;">&#9851;&#65039; Refresh Chess64 to implement piece style change.</div>
       <div class="setting-row"><span>Board Theme</span><select id="st-boardtheme" onchange="setBoardTheme(this.value)"><option value="classic">Classic</option><option value="green">Green</option><option value="blue">Blue</option><option value="purple">Purple</option><option value="coral">Coral</option>
               <option value="walnut">Walnut</option>
               <option value="midnight">Midnight</option>
@@ -13628,7 +13629,7 @@ setTimeout(()=>{
     <div id="chat-msgs" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px">
       <div style="text-align:center;color:var(--text2);font-size:13px;margin-top:40px">Select or start a conversation</div>
     </div>
-    <div id="chat-input" style="display:none;padding:8px 10px;border-top:1px solid var(--border);display:none;gap:6px;align-items:flex-end">
+    <div id="chat-input" style="display:none;padding:8px 10px;border-top:1px solid var(--border);gap:6px;align-items:flex-end">
       <textarea id="chat-msg-box" rows="2" placeholder="Type a message... (Enter to send)"
         style="flex:1;padding:8px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;resize:none"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();chatSend();}"></textarea>
@@ -14825,8 +14826,9 @@ function olHandleGameUpdate(g){
   OL.bTime = g.bTime || OL.bTime;
   olUpdateClockDisplay();
 
-  // Update move list
+  // Update move list (UCI + SAN)
   OL.moveList = g.moves || [];
+  OL.sanMoveList = g.sanMoves || [];
   olRenderMoveList();
 
   // Check for draw offer
@@ -14913,6 +14915,7 @@ function olBoardClick(r,c){
 
 async function olSubmitMove(mv){
   try{
+    OL.prevGs = OL.gs; // save for SAN computation
     var newGs = applyMove(OL.gs, mv);
     var uci = String.fromCharCode(97+mv.fc)+(8-mv.fr)+String.fromCharCode(97+mv.tc)+(8-mv.tr);
     if(mv.promo){ var pMap={5:'q',4:'r',3:'b',2:'n'}; uci+=pMap[mv.promo]||'q'; }
@@ -14929,7 +14932,13 @@ async function olSubmitMove(mv){
     if(OL.myColor==='w') OL.wTime = Math.max(0, OL.wTime - elapsed + OL.selectedInc);
     else OL.bTime = Math.max(0, OL.bTime - elapsed + OL.selectedInc);
 
-    await window._fb.submitOnlineMove(OL.gameId, uci, newFen, Math.round(OL.wTime), Math.round(OL.bTime));
+    // Compute SAN for proper notation
+    var moveSan = uci;
+    try{
+      var prevGs = parseFen(OL.gs.fen||fenFromGs(parseFen(newFen))); // get gs before move
+      moveSan = typeof moveToSan==='function' ? moveToSan(OL.prevGs||OL.gs, mv) : uci;
+    }catch(e){}
+    await window._fb.submitOnlineMove(OL.gameId, uci, newFen, Math.round(OL.wTime), Math.round(OL.bTime), moveSan);
 
     // Check local game over
     if(isMate(newGs)){
@@ -14994,11 +15003,13 @@ function olUpdateClockDisplay(){
 function olRenderMoveList(){
   var el = document.getElementById('ol-move-list');
   if(!el) return;
+  // Prefer SAN moves if available, fall back to UCI
+  var moves = OL.sanMoveList && OL.sanMoveList.length ? OL.sanMoveList : OL.moveList;
   var html='';
-  for(var i=0;i<OL.moveList.length;i+=2){
+  for(var i=0;i<moves.length;i+=2){
     html += '<span style="color:var(--text2);margin-right:4px">'+(Math.floor(i/2)+1)+'.</span>'
-          + '<span style="margin-right:8px">'+(OL.moveList[i]||'')+'</span>'
-          + (OL.moveList[i+1]?'<span style="margin-right:12px">'+OL.moveList[i+1]+'</span>':'')
+          + '<span style="margin-right:8px">'+(moves[i]||'')+'</span>'
+          + (moves[i+1]?'<span style="margin-right:12px">'+moves[i+1]+'</span>':'')
           + (i%4===2?'<br>':'');
   }
   el.innerHTML = html || '<span style="color:var(--text2)">No moves yet</span>';
@@ -15012,6 +15023,13 @@ function olHandleGameOver(g){
 
   var myUid = window._fb&&window._fb.user?window._fb.user.uid:'';
   var iAmWhite = g.whiteUid === myUid;
+  // Update local game stats
+  try{
+    var isWin = (g.status==='white_wins'&&iAmWhite)||(g.status==='black_wins'&&!iAmWhite);
+    var isDraw = g.status==='draw';
+    var result = isWin?'w':isDraw?'d':'l';
+    if(typeof addStat==='function') addStat(result);
+  }catch(e){}
   var msg = '';
   if(g.status==='white_wins')  msg = iAmWhite?'🏆 You won!':'💀 You lost. White wins.';
   else if(g.status==='black_wins') msg = !iAmWhite?'🏆 You won!':'💀 You lost. Black wins.';
@@ -15025,7 +15043,12 @@ function olHandleGameOver(g){
   // Return to lobby button
   var statusEl = document.getElementById('ol-game-status');
   if(statusEl){
-    statusEl.innerHTML = msg + '<br><button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="olReturnToLobby()">New Game</button>';
+    statusEl.innerHTML = msg
+      + '<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">'
+      + '<button class="btn btn-primary btn-sm" onclick="olReturnToLobby()">&#8592; Back to Lobby</button>'
+      + '<button class="btn btn-ghost btn-sm" onclick="olCopyGamePgn()">&#128203; Copy PGN</button>'
+      + '<button class="btn btn-ghost btn-sm" onclick="olAnalyseGame()">&#128269; Analyse</button>'
+      + '</div>';
   }
 }
 
@@ -16682,6 +16705,469 @@ async function admDenyRename(el){
     else if(_o&&t!=='usernames'&&t!=='requests') _o(t);
   };
 })();
+</script>
+
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   CHESS64 — Post-game · Stats · Analysis links · Rename fix ·
+             Profile pic · Admin search · Parental controls
+   ═══════════════════════════════════════════════════════════════ */
+
+// ── Post-game: Copy PGN ───────────────────────────────────────────
+function olCopyGamePgn(){
+  var moves = OL.sanMoveList && OL.sanMoveList.length ? OL.sanMoveList : (OL.moveList||[]);
+  var pgn = '';
+  for(var i=0;i<moves.length;i+=2){
+    pgn += (Math.floor(i/2)+1)+'. '+(moves[i]||'');
+    if(moves[i+1]) pgn += ' '+moves[i+1];
+    pgn += ' ';
+  }
+  var white = OL.oppName && OL.myColor==='b' ? OL.oppName : (window._fb&&window._fb.user?window._fb.user.displayName:'?');
+  var black = OL.oppName && OL.myColor==='w' ? OL.oppName : (window._fb&&window._fb.user?window._fb.user.displayName:'?');
+  var full = '[White "'+white+'"]\n[Black "'+black+'"]\n[Result "?"]\n\n'+pgn.trim();
+  if(navigator.clipboard) navigator.clipboard.writeText(full).then(function(){ showToast('PGN copied!'); });
+  else { var ta=document.createElement('textarea'); ta.value=full; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); showToast('PGN copied!'); }
+}
+
+// ── Post-game: Open in Analysis Board ────────────────────────────
+function olAnalyseGame(){
+  var moves = OL.sanMoveList && OL.sanMoveList.length ? OL.sanMoveList : (OL.moveList||[]);
+  var pgn = '';
+  for(var i=0;i<moves.length;i+=2){
+    pgn += (Math.floor(i/2)+1)+'. '+(moves[i]||'');
+    if(moves[i+1]) pgn += ' '+moves[i+1];
+    pgn += ' ';
+  }
+  var inp = document.getElementById('an-pgn-input');
+  if(inp) inp.value = pgn.trim();
+  navTo('analysis');
+  setTimeout(function(){ try{ if(typeof loadPGN==='function') loadPGN(); }catch(e){} },200);
+}
+
+// ── Recent games clickable → open in analysis ─────────────────────
+function openGameInAnalysis(gameId){
+  // Fetch game from Firestore and load into analysis board
+  fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/onlineGames/'+gameId+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var f=d.fields||{};
+      var moves=(f.sanMoves&&f.sanMoves.arrayValue)?f.sanMoves.arrayValue.values.map(function(v){return v.stringValue||'';}):
+                (f.moves&&f.moves.arrayValue)?f.moves.arrayValue.values.map(function(v){return v.stringValue||'';}):[]; 
+      var white=f.whiteName?f.whiteName.stringValue:'?';
+      var black=f.blackName?f.blackName.stringValue:'?';
+      var pgn='[White "'+white+'"]\n[Black "'+black+'"]\n\n';
+      for(var i=0;i<moves.length;i+=2){
+        pgn+=(Math.floor(i/2)+1)+'. '+(moves[i]||'');
+        if(moves[i+1]) pgn+=' '+moves[i+1];
+        pgn+=' ';
+      }
+      var inp=document.getElementById('an-pgn-input');
+      if(inp) inp.value=pgn.trim();
+      navTo('analysis');
+      setTimeout(function(){try{if(typeof loadPGN==='function')loadPGN();}catch(e){}},200);
+    })
+    .catch(function(e){ showToast('Could not load game: '+e.message); });
+}
+
+// Make recent game cards clickable - patch liveGamesLoad
+(function(){
+  var _orig = liveGamesLoad;
+  window.liveGamesLoad = async function(){
+    await _orig();
+    // Add click handlers to recent game items
+    setTimeout(function(){
+      var items = document.querySelectorAll('[data-game-id]');
+      items.forEach(function(el){
+        el.style.cursor='pointer';
+        if(!el._hasClickHandler){
+          el._hasClickHandler=true;
+          el.addEventListener('click',function(){openGameInAnalysis(el.dataset.gameId);});
+        }
+      });
+    },500);
+  };
+})();
+
+// ── Username rename: enforce once strictly ────────────────────────
+// Override _fbCheckRenameStatus to always re-check from server
+var _origCheckRename = window._fbCheckRenameStatus;
+window._fbCheckRenameStatus = async function(){
+  var info=document.getElementById('fb-rename-info'); if(!info) return;
+  try{
+    var u=window._fb&&window._fb.user; if(!u) return;
+    var r=await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+u.uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q');
+    var d=await r.json();
+    var usedFree=d.fields&&d.fields.usedFreeRename&&d.fields.usedFreeRename.booleanValue===true;
+    var adminOk=d.fields&&d.fields.usernameChangeAllowed&&d.fields.usernameChangeAllowed.booleanValue===true;
+    var approved=d.fields&&d.fields.approvedUsername&&d.fields.approvedUsername.stringValue||'';
+    window._renameState={usedFree:usedFree,adminOk:adminOk,approved:approved};
+    if(!usedFree){
+      info.innerHTML='You can change your username <strong>once</strong>. After that, you must submit a request for admin approval.';
+    } else if(adminOk){
+      info.innerHTML='&#10003; Admin approved your name change to "<strong>'+(approved||'your chosen name')+'</strong>". This uses your admin approval.';
+    } else {
+      info.innerHTML='You have already used your free rename. Submit a request below for admin approval.';
+    }
+  }catch(e){
+    if(info) info.textContent='One free rename available.';
+    window._renameState={usedFree:false,adminOk:false,approved:''};
+  }
+};
+
+// ── Admin user search ─────────────────────────────────────────────
+(function(){
+  // Inject search box into admin users pane
+  function injectAdminSearch(){
+    var pane=document.getElementById('adm-pane-users');
+    if(!pane||document.getElementById('adm-user-search')) return;
+    var searchDiv=document.createElement('div');
+    searchDiv.style.cssText='margin-bottom:8px;display:flex;gap:6px';
+    searchDiv.innerHTML='<input id="adm-user-search" type="text" placeholder="Search users by name or email..." '
+      +'style="flex:1;padding:6px 9px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px" '
+      +'oninput="admFilterUsers(this.value)">';
+    var firstBtn=pane.querySelector('button');
+    if(firstBtn) pane.insertBefore(searchDiv, firstBtn.nextSibling);
+    else pane.insertBefore(searchDiv, pane.firstChild);
+  }
+  setTimeout(injectAdminSearch,1000);
+  // Re-inject when admin panel opens
+  var _o=window._onFbAuthChange;
+  window._onFbAuthChange=function(user,isAdmin){
+    if(_o) _o(user,isAdmin);
+    if(isAdmin) setTimeout(injectAdminSearch,500);
+  };
+})();
+
+function admFilterUsers(query){
+  var items=document.querySelectorAll('#fb-admin-users [data-user-search]');
+  var q=(query||'').toLowerCase();
+  items.forEach(function(el){
+    var text=(el.dataset.userSearch||'').toLowerCase();
+    el.style.display=(!q||text.indexOf(q)>-1)?'':'none';
+  });
+}
+
+// Patch fbLoadAdminUsers to add data-user-search attributes
+(function(){
+  var _orig=window.fbLoadAdminUsers;
+  window.fbLoadAdminUsers=async function(){
+    if(_orig) await _orig();
+    // Add search attributes to user rows
+    setTimeout(function(){
+      var rows=document.querySelectorAll('#fb-admin-users > div, #fb-admin-users .user-row');
+      rows.forEach(function(row){
+        if(!row.dataset.userSearch){
+          row.dataset.userSearch=row.textContent.toLowerCase();
+        }
+      });
+    },500);
+  };
+})();
+
+// ── Profile Picture Change ────────────────────────────────────────
+var _builtinAvatars = ['&#128081;','&#9822;','&#9820;','&#9818;','&#9812;','&#9819;','&#128293;','&#9889;','&#127919;','&#128218;'];
+
+function fbShowProfilePicMenu(){
+  var existing=document.getElementById('fb-photo-menu');
+  if(existing){existing.remove();return;}
+  var menu=document.createElement('div');
+  menu.id='fb-photo-menu';
+  menu.style.cssText='margin-top:10px;background:var(--bg3);border-radius:8px;padding:12px';
+  menu.innerHTML='<div style="font-weight:700;font-size:13px;margin-bottom:10px">Change Profile Picture</div>'
+    +'<div style="margin-bottom:8px">'
+    +'<label style="font-size:11px;color:var(--text2);font-weight:600;display:block;margin-bottom:4px">Built-in Avatars</label>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:6px">'
+    +_builtinAvatars.map(function(av,i){
+      return '<button onclick="fbSetAvatarEmoji(\''+av+'\')" style="width:36px;height:36px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;font-size:20px;cursor:pointer">'+av+'</button>';
+    }).join('')
+    +'</div></div>'
+    +'<div style="margin-bottom:8px">'
+    +'<label style="font-size:11px;color:var(--text2);font-weight:600;display:block;margin-bottom:4px">From URL</label>'
+    +'<div style="display:flex;gap:5px"><input id="fb-photo-url-inp" type="text" placeholder="https://..." style="flex:1;padding:5px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px">'
+    +'<button class="btn btn-primary btn-sm" onclick="fbSetPhotoUrl()">Set</button></div>'
+    +'</div>'
+    +'<div>'
+    +'<label style="font-size:11px;color:var(--text2);font-weight:600;display:block;margin-bottom:4px">Upload from Device</label>'
+    +'<input type="file" accept="image/*" onchange="fbUploadPhotoFile(this)" style="font-size:12px;color:var(--text2);width:100%">'
+    +'</div>'
+    +'<button class="btn btn-ghost btn-sm" onclick="document.getElementById(\'fb-photo-menu\').remove()" style="margin-top:8px;width:100%">Cancel</button>';
+  var picArea=document.getElementById('fb-profile-pic');
+  if(picArea) picArea.parentNode.insertBefore(menu, picArea.nextSibling);
+  else document.getElementById('fb-signed-in').appendChild(menu);
+}
+
+async function fbSetAvatarEmoji(emoji){
+  try{
+    var u=window._fb&&window._fb.user; if(!u) return;
+    // Store emoji as photoURL metadata in Firestore
+    var tok=await u.getIdToken();
+    await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+u.uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=emojiAvatar',{
+      method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+      body:JSON.stringify({fields:{emojiAvatar:{stringValue:emoji}}})
+    });
+    var pic=document.getElementById('fb-profile-pic');
+    if(pic) pic.innerHTML='<div style="width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;background:var(--bg3)">'+emoji+'</div>';
+    document.getElementById('fb-photo-menu')?.remove();
+    showToast('Avatar updated!');
+  }catch(e){showToast('Error: '+e.message);}
+}
+
+async function fbSetPhotoUrl(){
+  var url=document.getElementById('fb-photo-url-inp')?.value?.trim();
+  if(!url) return;
+  try{
+    var u=window._fb&&window._fb.user; if(!u) return;
+    var tok=await u.getIdToken();
+    var r=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:update?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({idToken:tok,photoUrl:url,returnSecureToken:true})
+    });
+    if(!r.ok) throw new Error('Update failed');
+    await u.reload();
+    var pic=document.getElementById('fb-profile-pic');
+    if(pic) pic.innerHTML='<img src="'+url+'" style="width:56px;height:56px;border-radius:50%;object-fit:cover" onerror="this.parentNode.innerHTML=\'&#128100;\'">';
+    document.getElementById('fb-photo-menu')?.remove();
+    showToast('Photo updated!');
+  }catch(e){showToast('Error: '+e.message);}
+}
+
+function fbUploadPhotoFile(input){
+  var file=input.files[0]; if(!file) return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var dataUrl=e.target.result;
+    // Store as base64 in Firestore (for local display - not ideal for large images)
+    // Use canvas to compress first
+    var img=new Image();
+    img.onload=async function(){
+      var canvas=document.createElement('canvas');
+      var maxSize=120;
+      var scale=Math.min(maxSize/img.width,maxSize/img.height,1);
+      canvas.width=img.width*scale; canvas.height=img.height*scale;
+      canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+      var compressed=canvas.toDataURL('image/jpeg',0.8);
+      try{
+        var u=window._fb&&window._fb.user; if(!u) return;
+        var tok=await u.getIdToken();
+        await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+u.uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=localPhoto',{
+          method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+          body:JSON.stringify({fields:{localPhoto:{stringValue:compressed}}})
+        });
+        var pic=document.getElementById('fb-profile-pic');
+        if(pic) pic.innerHTML='<img src="'+compressed+'" style="width:56px;height:56px;border-radius:50%;object-fit:cover">';
+        document.getElementById('fb-photo-menu')?.remove();
+        showToast('Photo updated!');
+      }catch(e){showToast('Error: '+e.message);}
+    };
+    img.src=dataUrl;
+  };
+  reader.readAsDataURL(file);
+}
+
+// Inject change photo button into profile
+(function(){
+  function injectPhotoBtn(){
+    var pic=document.getElementById('fb-profile-pic');
+    if(!pic||document.getElementById('fb-photo-change-btn')) return;
+    var btn=document.createElement('button');
+    btn.id='fb-photo-change-btn';
+    btn.title='Change profile picture';
+    btn.style.cssText='position:absolute;bottom:0;right:0;background:var(--bg2);border:1px solid var(--border);border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;display:none;align-items:center;justify-content:center';
+    btn.innerHTML='&#9998;';
+    btn.onclick=fbShowProfilePicMenu;
+    pic.style.position='relative';
+    pic.appendChild(btn);
+  }
+  var _o=window._onFbAuthChange;
+  window._onFbAuthChange=function(user,isAdmin){
+    if(_o) _o(user,isAdmin);
+    var btn=document.getElementById('fb-photo-change-btn');
+    if(btn) btn.style.display=user&&!user.isAnonymous?'flex':'none';
+    setTimeout(injectPhotoBtn,500);
+  };
+})();
+
+// ── PARENTAL CONTROLS ─────────────────────────────────────────────
+var _PARENTAL_PAGES = ['chat','forums','articles','players','events'];
+var _parentalState = null;
+
+function parentalLoad(){
+  try{
+    var s=localStorage.getItem('c64_parental');
+    _parentalState=s?JSON.parse(s):null;
+  }catch(e){_parentalState=null;}
+  if(_parentalState&&_parentalState.enabled) parentalApply();
+}
+
+function parentalApply(){
+  if(!_parentalState||!_parentalState.enabled) return;
+  var blocked=_parentalState.blocked||{};
+  // Hide nav items for blocked pages
+  _PARENTAL_PAGES.forEach(function(page){
+    if(blocked[page]){
+      document.querySelectorAll('.nav-dd-item[data-page="'+page+'"]').forEach(function(el){
+        el.style.display='none';
+      });
+    }
+  });
+}
+
+// Patch navTo to block pages
+(function(){
+  var _o=window.navTo;
+  window.navTo=function(page){
+    if(_parentalState&&_parentalState.enabled){
+      var blocked=_parentalState.blocked||{};
+      if(blocked[page]){
+        showToast('&#128274; This page is restricted by parental controls.');
+        return;
+      }
+    }
+    if(_o) _o(page);
+  };
+})();
+
+function parentalShowSetup(){
+  var existing=document.getElementById('parental-modal');
+  if(existing){existing.style.display='flex';parentalRefreshUI();return;}
+  var modal=document.createElement('div');
+  modal.id='parental-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px';
+  var state=_parentalState||{enabled:false,blocked:{},hash:'',question:'',answer:''};
+  var blocked=state.blocked||{};
+  modal.innerHTML='<div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;max-width:420px;width:100%;max-height:90vh;overflow-y:auto">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">'
+    +'<h3 style="margin:0">&#128274; Parental Controls</h3>'
+    +'<button onclick="document.getElementById(\'parental-modal\').style.display=\'none\'" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer">&#10005;</button>'
+    +'</div>'
+    +(state.enabled?
+      '<div style="background:rgba(88,166,255,.1);border:1px solid var(--accent);border-radius:8px;padding:10px;margin-bottom:14px;font-size:12px;color:var(--accent)">&#128274; Parental controls are currently <strong>ON</strong></div>':
+      '<div style="background:rgba(250,204,21,.1);border:1px solid rgba(250,204,21,.4);border-radius:8px;padding:10px;margin-bottom:14px;font-size:12px;color:var(--gold)">Parental controls are <strong>OFF</strong></div>'
+    )
+    +'<div id="parental-toggle-section">'
+    +(state.enabled?
+      '<button class="btn btn-red btn-sm" onclick="parentalDisablePrompt()" style="width:100%;margin-bottom:12px">&#128275; Disable Parental Controls</button>':
+      '<button class="btn btn-primary" onclick="parentalEnableFlow()" style="width:100%;margin-bottom:12px">&#128274; Enable Parental Controls</button>'
+    )
+    +'</div>'
+    +(state.enabled?'<div style="margin-bottom:12px"><div style="font-weight:700;font-size:13px;margin-bottom:8px">Blocked Pages:</div>'
+    +_PARENTAL_PAGES.map(function(page){
+      var isBlocked=blocked[page]?true:false;
+      var labels={chat:'Messages/Chat',forums:'Forums',articles:'Articles',players:'Players',events:'Events'};
+      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">'
+        +'<span style="font-size:13px">'+labels[page]+'</span>'
+        +'<div style="width:36px;height:20px;border-radius:10px;background:'+(isBlocked?'var(--accent)':'#555')+';cursor:pointer;position:relative;transition:background .2s" '
+        +'onclick="parentalTogglePage(\''+page+'\',this)" data-page="'+page+'">'
+        +'<div style="position:absolute;top:2px;'+(isBlocked?'left:18px':'left:2px')+';width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s"></div>'
+        +'</div></div>';
+    }).join('')+'</div>':'')
+    +'<div id="parental-form-area"></div>'
+    +'</div>';
+  document.body.appendChild(modal);
+}
+
+async function parentalTogglePage(page, el){
+  if(!_parentalState||!_parentalState.enabled) return;
+  var code=prompt('Enter parental control code to modify settings:');
+  if(!code) return;
+  var hash=await _hashStr(code);
+  if(hash!==_parentalState.hash){showToast('Wrong code.');return;}
+  _parentalState.blocked[page]=!_parentalState.blocked[page];
+  localStorage.setItem('c64_parental',JSON.stringify(_parentalState));
+  parentalApply();
+  el.style.background=_parentalState.blocked[page]?'var(--accent)':'#555';
+  el.querySelector('div').style.left=_parentalState.blocked[page]?'18px':'2px';
+}
+
+function parentalEnableFlow(){
+  var formArea=document.getElementById('parental-form-area');
+  if(!formArea) return;
+  formArea.innerHTML='<div style="margin-top:10px">'
+    +'<div style="font-size:12px;color:var(--text2);margin-bottom:10px">Set a PIN code and security question to protect these settings.</div>'
+    +'<label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">PIN Code (4-8 digits)</label>'
+    +'<input id="pc-code" type="password" maxlength="8" placeholder="e.g. 1234" style="width:100%;padding:7px 9px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;margin-bottom:8px">'
+    +'<label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Security Question</label>'
+    +'<input id="pc-question" type="text" placeholder="e.g. My pet\'s name?" style="width:100%;padding:7px 9px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;margin-bottom:8px">'
+    +'<label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Answer</label>'
+    +'<input id="pc-answer" type="text" placeholder="Answer (case insensitive)" style="width:100%;padding:7px 9px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;margin-bottom:10px">'
+    +'<button class="btn btn-primary" onclick="parentalConfirmEnable()" style="width:100%">&#128274; Enable</button>'
+    +'</div>';
+}
+
+async function parentalConfirmEnable(){
+  var code=document.getElementById('pc-code')?.value||'';
+  var question=document.getElementById('pc-question')?.value?.trim()||'';
+  var answer=document.getElementById('pc-answer')?.value?.trim().toLowerCase()||'';
+  if(code.length<4){showToast('PIN must be at least 4 digits.');return;}
+  if(!question||!answer){showToast('Security question and answer required.');return;}
+  var hash=await _hashStr(code);
+  var aHash=await _hashStr(answer);
+  _parentalState={enabled:true,blocked:{},hash:hash,question:question,answerHash:aHash};
+  localStorage.setItem('c64_parental',JSON.stringify(_parentalState));
+  parentalApply();
+  document.getElementById('parental-modal')?.remove();
+  showToast('&#128274; Parental controls enabled!');
+}
+
+async function parentalDisablePrompt(){
+  var code=prompt('Enter PIN to disable parental controls:');
+  if(!code) return;
+  var hash=await _hashStr(code);
+  if(hash!==_parentalState.hash){
+    // Try security question
+    var ans=prompt(_parentalState.question+'\n(Security question):');
+    if(!ans) return;
+    var aHash=await _hashStr(ans.trim().toLowerCase());
+    if(aHash!==_parentalState.answerHash){showToast('Incorrect PIN and security answer.');return;}
+  }
+  _parentalState=null;
+  localStorage.removeItem('c64_parental');
+  document.getElementById('parental-modal')?.remove();
+  // Restore nav items
+  _PARENTAL_PAGES.forEach(function(page){
+    document.querySelectorAll('.nav-dd-item[data-page="'+page+'"]').forEach(function(el){
+      el.style.display='';
+    });
+  });
+  showToast('&#128275; Parental controls disabled.');
+}
+
+async function _hashStr(str){
+  var buf=new TextEncoder().encode(str);
+  var hash=await crypto.subtle.digest('SHA-256',buf);
+  return Array.from(new Uint8Array(hash)).map(function(b){return b.toString(16).padStart(2,'0');}).join('');
+}
+
+// Add parental controls link to settings page
+(function(){
+  setTimeout(function(){
+    var settingsPage=document.getElementById('page-settings');
+    if(!settingsPage||document.getElementById('parental-settings-row')) return;
+    var row=document.createElement('div');
+    row.id='parental-settings-row';
+    row.className='section';
+    row.innerHTML='<div class="card"><h3>&#128274; Parental Controls</h3>'
+      +'<p style="color:var(--text2);font-size:13px;margin-bottom:12px">Restrict access to specific features with a PIN code.</p>'
+      +'<button class="btn btn-primary" onclick="parentalShowSetup()">&#9881;&#65039; Manage Parental Controls</button>'
+      +'</div>';
+    settingsPage.querySelector('div').appendChild(row);
+    parentalLoad();
+  },800);
+})();
+
+// ── Admin: stats fix - admLoadAnalytics should show real stats ─────
+// The existing admLoadAnalytics uses Firebase - ensure it reloads
+(function(){
+  var _o=window.admTab;
+  window.admTab=function(t){
+    if(_o) _o(t);
+    if(t==='analytics') setTimeout(function(){
+      if(typeof admLoadAnalytics==='function') admLoadAnalytics();
+    },100);
+  };
+})();
+
 </script>
 
 </body></html>
