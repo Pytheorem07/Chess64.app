@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
-<meta name="google-site-verification" content="googlee55b5fb559ab12d8" />
+<meta name="google-site-verification" content="fz7fau_KmAp2y3iL32xcB3dnCr-x-eEDSljAlvzFwSc" />
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5">
 <meta name="mobile-web-app-capable" content="yes">
@@ -14254,12 +14254,11 @@ function lbShowBotData(){
     +'<th style="padding:5px;text-align:left">Rank</th><th style="text-align:left">Player</th>'
     +'<th style="text-align:center">Games vs '+(botId||'All')+'</th><th style="text-align:center">Wins</th></tr></thead><tbody>'
     +rows.filter(function(r){return r.g>0;}).map(function(r,i){
-      return '<tr style="border-bottom:1px solid var(--border)">'
-        +'<td style="padding:6px">#'+(i+1)+'</td>'
-        +'<td>'+r.name.replace(/</g,'&lt;')+'</td>'
-        +'<td style="text-align:center">'+r.g+'</td>'
-        +'<td style="text-align:center;color:var(--green)">'+r.w+'</td>'
-        +'</tr>';
+              var analyseBtn = g.status!=='active' && g.id
+          ? '<button class="btn btn-ghost btn-sm" style="font-size:9px;padding:1px 5px;margin-left:3px" onclick="event.stopPropagation();openGameInAnalysis(\'' + g.id + '\')" title="Analyse">&#128269;</button>'
+          : '';
+        var clickAttr = g.status!=='active' && g.id ? 'style="border-bottom:1px solid var(--border);cursor:pointer" onclick="openGameInAnalysis(\'' + g.id + '\')"' : 'style="border-bottom:1px solid var(--border)"';
+        return '<tr ' + clickAttr + '>'          +'<td style="padding:5px">'+(opp||'?').replace(/</g,'&lt;')+'</td>'          +'<td style="text-align:center">'+(g.mins||'?')+'+'+( g.inc||0)+'</td>'          +'<td style="text-align:center;color:'+resultColor+';font-weight:700">'+resultTxt+' '+resumeBtn+analyseBtn+'</td>'          +'<td style="text-align:center;color:var(--text2)">'+date+'</td>'          +'</tr>';
     }).join('')+'</tbody></table>';
 }
 
@@ -15161,10 +15160,13 @@ async function olLoadRecent(){
         else if(g.status==='active'){resultTxt='Active';resultColor='var(--accent)';}
         var date=g.createdAt&&g.createdAt.toDate?g.createdAt.toDate().toLocaleDateString():'';
         var resumeBtn=g.status==='active'?'<button class="btn btn-primary btn-sm" style="font-size:10px;padding:1px 6px" onclick="olResumeGame(\''+g.id+'\',\''+( iAmW?'w':'b')+'\',\''+opp.replace(/'/g,'')+'\')">\u25B6 Resume</button>':'';
-        return '<tr style="border-bottom:1px solid var(--border)">'
+        var analyseBtn = g.status!=='active' && g.id ? ' <button class="btn btn-ghost btn-sm" style="font-size:9px;padding:1px 5px" onclick="event.stopPropagation();openGameInAnalysis(\'' + g.id + '\')">&#128269;</button>' : '';
+        var trStyle = g.status!=='active' && g.id ? 'border-bottom:1px solid var(--border);cursor:pointer' : 'border-bottom:1px solid var(--border)';
+        var trClick = g.status!=='active' && g.id ? ' onclick="openGameInAnalysis(\'' + g.id + '\')"' : '';
+        return '<tr style="'+trStyle+'"' + trClick + '>'
           +'<td style="padding:5px">'+(opp||'?').replace(/</g,'&lt;')+'</td>'
           +'<td style="text-align:center">'+(g.mins||'?')+'+'+( g.inc||0)+'</td>'
-          +'<td style="text-align:center;color:'+resultColor+';font-weight:700">'+resultTxt+' '+resumeBtn+'</td>'
+          +'<td style="text-align:center;color:'+resultColor+';font-weight:700">'+resultTxt+' '+resumeBtn+analyseBtn+'</td>'
           +'<td style="text-align:center;color:var(--text2)">'+date+'</td>'
           +'</tr>';
       }).join('')+'</table>';
@@ -16487,18 +16489,19 @@ async function liveGamesLoad(){
     } else {
       // No live games — show recent finished games
       document.getElementById('home-live-games-title').innerHTML='&#9812; Recent Games';
-      // Query for any ended games (status not 'active')  
-      var r2=await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents:runQuery?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
-        method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({structuredQuery:{from:[{collectionId:'onlineGames'}],
-          where:{compositeFilter:{op:'OR',filters:[
-            {fieldFilter:{field:{fieldPath:'status'},op:'EQUAL',value:{stringValue:'white_wins'}}},
-            {fieldFilter:{field:{fieldPath:'status'},op:'EQUAL',value:{stringValue:'black_wins'}}},
-            {fieldFilter:{field:{fieldPath:'status'},op:'EQUAL',value:{stringValue:'draw'}}}
-          ]}},
-          orderBy:[{field:{fieldPath:'lastMoveAt'},direction:'DESCENDING'}],limit:5}})
-      });
-      var docs2=await r2.json();
+      // Query ended games - 3 separate fetches to avoid OR filter index requirement
+      var fetchStatus = async function(status){
+        var resp = await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents:runQuery?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({structuredQuery:{from:[{collectionId:'onlineGames'}],
+            where:{fieldFilter:{field:{fieldPath:'status'},op:'EQUAL',value:{stringValue:status}}},
+            orderBy:[{field:{fieldPath:'createdAt'},direction:'DESCENDING'}],limit:3}})
+        });
+        return await resp.json();
+      };
+      var [d1,d2,d3] = await Promise.all([fetchStatus('white_wins'),fetchStatus('black_wins'),fetchStatus('draw')]);
+      var allDocs = [].concat(Array.isArray(d1)?d1:[d1], Array.isArray(d2)?d2:[d2], Array.isArray(d3)?d3:[d3]);
+      var docs2 = allDocs;
       var recent=(Array.isArray(docs2)?docs2:[docs2]).filter(function(d){return d.document;}).map(function(d){
         var f=d.document.fields||{};
         var g=function(k){var v=f[k];return v?(v.stringValue||v.integerValue||''):'';}; 
@@ -16513,8 +16516,8 @@ async function liveGamesLoad(){
       }
       el.innerHTML=recent.map(function(g){
         var resColor=g.result==='1-0'?'#4ade80':g.result==='0-1'?'#f87171':'#facc15';
-        var safeId=g.id||'';
-        var row='<div class="recent-game-row" style="padding:7px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:6px;cursor:pointer" title="Click to analyse">';
+                var safeId=g.id||'';
+        var row='<div class="recent-game-row" data-game-id="'+safeId+'" onclick="safeId&&openGameInAnalysis(\''+safeId+'\');" style="padding:7px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:6px;cursor:pointer" title="Click to analyse">';
         row+='<div style="font-size:12px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+g.whiteName.replace(/</g,'&lt;')+' vs '+g.blackName.replace(/</g,'&lt;')+'</div>';
         row+='<span style="font-size:11px;font-weight:700;color:'+resColor+';flex-shrink:0">'+g.result+'</span>';
         row+='<span style="font-size:10px;color:var(--text2);flex-shrink:0">&#128269;</span>';
@@ -17140,6 +17143,17 @@ async function parentalTogglePage(page, el){
   parentalApply();
   el.style.background=_parentalState.blocked[page]?'var(--accent)':'#555';
   el.querySelector('div').style.left=_parentalState.blocked[page]?'18px':'2px';
+  // Sync to Firebase
+  try{
+    if(window._fb&&window._fb.user&&!window._fb.user.isAnonymous){
+      window._fb.user.getIdToken().then(function(tok){
+        fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+window._fb.user.uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=parentalBlocked',{
+          method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+          body:JSON.stringify({fields:{parentalBlocked:{stringValue:JSON.stringify(_parentalState.blocked||{})}}})
+        });
+      });
+    }
+  }catch(e){}
 }
 
 function parentalEnableFlow(){
@@ -17170,6 +17184,16 @@ async function parentalConfirmEnable(){
   parentalApply();
   document.getElementById('parental-modal')?.remove();
   showToast('&#128274; Parental controls enabled!');
+  // Sync to Firebase immediately so admin can see it
+  try{
+    if(window._fb&&window._fb.user&&!window._fb.user.isAnonymous){
+      var tok=await window._fb.user.getIdToken();
+      await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+window._fb.user.uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=parentalEnabled&updateMask.fieldPaths=parentalBlocked',{
+        method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+        body:JSON.stringify({fields:{parentalEnabled:{booleanValue:true},parentalBlocked:{stringValue:'{}'}}}),
+      });
+    }
+  }catch(e){ console.warn('Parental sync error:',e); }
 }
 
 async function parentalDisablePrompt(){
@@ -17363,15 +17387,16 @@ async function admLoadParentalUsers(){
   el.innerHTML = '<div style="color:var(--text2)">Loading...</div>';
   try{
     // Fetch users who have parentalControls field set in their Firestore doc
+    // Fetch all users and filter client-side (avoids needing a Firestore index)
     var r = await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents:runQuery?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({structuredQuery:{
-        from:[{collectionId:'users'}],
-        where:{fieldFilter:{field:{fieldPath:'parentalEnabled'},op:'EQUAL',value:{booleanValue:true}}},
-        limit:100
-      }})
+      body: JSON.stringify({structuredQuery:{from:[{collectionId:'users'}],limit:500}})
     });
-    var docs = await r.json();
+    var allDocs = await r.json();
+    // Filter to only users with parentalEnabled=true
+    var docs = (Array.isArray(allDocs)?allDocs:[allDocs]).filter(function(d){
+      return d.document && d.document.fields && d.document.fields.parentalEnabled && d.document.fields.parentalEnabled.booleanValue===true;
+    });
     var users = (Array.isArray(docs)?docs:[docs]).filter(function(d){return d.document;}).map(function(d){
       var f=d.document.fields||{};
       var uid=d.document.name.split('/').pop();
