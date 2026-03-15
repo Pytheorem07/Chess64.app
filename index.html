@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
+<meta name="google-site-verification" content="googlee55b5fb559ab12d8" />
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5">
 <meta name="mobile-web-app-capable" content="yes">
@@ -481,9 +482,12 @@ window._fb = {
   },
   async approveBloggerRequest(uid){
     if(!_isAdmin||!_db) return;
-    await setDoc(doc(_db,'roles',uid),{blogger:true});
-    await updateDoc(doc(_db,'bloggerRequests',uid),{status:'approved'});
+    // Grant blogger role (works - admin can write roles)
+    await setDoc(doc(_db,'roles',uid),{blogger:true,grantedAt:serverTimestamp(),grantedBy:_fbUser.uid});
+    // Update user record
     try{ await updateDoc(doc(_db,'users',uid),{role:'blogger'}); }catch(_){}
+    // Delete the request rather than update it (avoids permission issue on update)
+    try{ await deleteDoc(doc(_db,'bloggerRequests',uid)); }catch(_){}
   },
   async denyBloggerRequest(uid){
     if(!_isAdmin||!_db) return;
@@ -2865,14 +2869,23 @@ function getSt(){return JSON.parse(localStorage.getItem('c64_stats')||'{"g":0,"w
 function setSt(s){localStorage.setItem('c64_stats',JSON.stringify(s));}
 function addStat(r){
   const s=getSt();s.g++;s[r]=(s[r]||0)+1;
-  // ELO estimate based on win rate
   if(s.g>=5){
     const wr=(s.w||0)/s.g;
-    // Simple ELO estimation: 1200 base + performance adjustment
-    const estElo=Math.round(800+wr*1200);
-    s.elo=estElo;
+    s.elo=Math.round(800+wr*1200);
   }
   setSt(s);updateStatDisplay();
+  // Sync stats to Firebase so admin panel sees them
+  try{
+    if(window._fb&&window._fb.user&&!window._fb.user.isAnonymous){
+      const uid=window._fb.user.uid;
+      window._fb.user.getIdToken().then(function(tok){
+        return fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=stats',{
+          method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+          body:JSON.stringify({fields:{stats:{stringValue:JSON.stringify(s)}}})
+        });
+      }).catch(function(){});
+    }
+  }catch(e){}
 }
 function updateStatDisplay(){
   const s=getSt();
@@ -3106,7 +3119,7 @@ function botSay(sit){
 }
 
 function sendChat(){
-  const i=document.getElementById('chat-input');const v=i.value.trim();if(!v)return;i.value='';
+  const i=document.getElementById('msg-input-bar');const v=i.value.trim();if(!v)return;i.value='';
   const h=document.getElementById('chat-history');
   if(h){const d=document.createElement('div');d.innerHTML=`<span style="color:var(--accent)">You:</span> ${v}`;h.prepend(d);}
   setTimeout(()=>botSay('start'),600);
@@ -10932,6 +10945,22 @@ async function fbLoadAdminUsers(){
         </div>`;
       }).join('');
   } catch(e){ el.innerHTML='<p style="color:var(--red);font-size:12px">'+e.message+'</p>'; }
+  // Add search attributes after render
+  setTimeout(function(){
+    var rows=document.querySelectorAll('#fb-admin-users .admin-user-row');
+    rows.forEach(function(row){ row.dataset.userSearch=row.textContent.toLowerCase(); });
+  },100);
+  // Inject search box if not present
+  var pane=document.getElementById('adm-pane-users');
+  if(pane&&!document.getElementById('adm-user-search')){
+    var sb=document.createElement('div');
+    sb.style.cssText='margin-bottom:8px';
+    sb.innerHTML='<input id="adm-user-search" type="text" placeholder="&#128269; Search users..." '
+      +'style="width:100%;padding:7px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px" '
+      +'oninput="admFilterUsers(this.value)">';
+    var firstBtn=pane.querySelector('button');
+    if(firstBtn) firstBtn.before(sb); else pane.prepend(sb);
+  }
 }
 
 async function admGrantBlogger(uid,name){
@@ -11784,7 +11813,7 @@ function artPreview(){
       <p style="color:var(--text2);font-size:13px;margin:8px 0 14px">The best way to support Chess64 is to share it with fellow chess players and send feedback!</p>
       <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
         <button class="btn btn-primary" onclick="navTo('feedback')">&#128172; Send Feedback</button>
-        <button class="btn btn-ghost" onclick="try{navigator.share({title:'Chess64',url:'https://pytheorem07.github.io/Chess64.app/',text:'Free chess with AI bots, puzzles, and analysis'})}catch(e){navigator.clipboard.writeText('https://chess64.app').then(()=>alert('Link copied!'))}">&#128279; Share Chess64</button>
+        <button class="btn btn-ghost" onclick="try{trackShareClick();navigator.share({title:'Chess64',url:'https://pytheorem07.github.io/Chess64.app/',text:'Free chess with AI bots, puzzles, and analysis'})}catch(e){navigator.clipboard.writeText('https://chess64.app').then(()=>alert('Link copied!'))}">&#128279; Share Chess64</button>
       </div>
     </div>
   </div>
@@ -13624,13 +13653,16 @@ setTimeout(()=>{
   <div style="flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)">
     <div id="chat-header" style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
       <span id="chat-title" style="font-weight:700;font-size:14px">Select a conversation</span>
-      <button id="chat-report-btn" onclick="chatReport()" style="display:none;font-size:11px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:none;color:var(--text2);cursor:pointer">🚩 Report</button>
+      <div style="display:flex;gap:5px;align-items:center">
+        <button id="chat-delete-btn" onclick="chatDeleteForMe(this.dataset.convId)" style="display:none;font-size:11px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:none;color:var(--red);cursor:pointer" title="Delete conversation (only for you)">🗑 Delete</button>
+        <button id="chat-report-btn" onclick="chatReport()" style="display:none;font-size:11px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:none;color:var(--text2);cursor:pointer">🚩 Report</button>
+      </div>
     </div>
     <div id="chat-msgs" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px">
       <div style="text-align:center;color:var(--text2);font-size:13px;margin-top:40px">Select or start a conversation</div>
     </div>
-    <div id="chat-input" style="display:none;padding:8px 10px;border-top:1px solid var(--border);gap:6px;align-items:flex-end">
-      <textarea id="chat-msg-box" rows="2" placeholder="Type a message... (Enter to send)"
+    <div id="msg-input-bar" style="display:flex;padding:8px 10px;border-top:1px solid var(--border);gap:6px;align-items:flex-end;visibility:hidden">
+      <textarea id="msg-box" rows="2" placeholder="Type a message... (Enter to send)"
         style="flex:1;padding:8px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;resize:none"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();chatSend();}"></textarea>
       <button class="btn btn-primary" onclick="chatSend()" style="height:36px;padding:0 14px">Send</button>
@@ -14181,7 +14213,7 @@ function lbShow(mode){
       try{st=JSON.parse(u.stats||'{}');}catch(_){}
       var pct=st.g>0?Math.round(100*st.w/st.g):0;
       var medal=i===0?'\uD83E\uDD47':i===1?'\uD83E\uDD48':i===2?'\uD83E\uDD49':'#'+(i+1);
-      return '<tr style="border-bottom:1px solid var(--border)">'
+      return '<tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="g.id&&g.status!==\'active\'?openGameInAnalysis(g.id):null" title="Click to analyse">'
         +'<td style="padding:7px;font-weight:700">'+medal+'</td>'
         +'<td style="padding:7px">'+(u.displayName||u.email||'Anon').replace(/</g,'&lt;')+'</td>'
         +'<td style="text-align:center">'+st.g+'</td>'
@@ -14437,11 +14469,15 @@ async function forumAdminBan(uid,name){
 var _chatCurrentId=null;
 
 async function chatInit(){
+  var inp = document.getElementById('msg-input-bar');
   if(!window._fb||!window._fb.user){
     var cl=document.getElementById('chat-conv-list');
-    if(cl) cl.innerHTML='<p style="padding:12px;font-size:13px;color:var(--text2)">Sign in to chat.</p>';
+    if(cl) cl.innerHTML='<p style="padding:12px;font-size:13px;color:var(--text2)">Sign in to use Messages.</p>'
+      +'<button class="btn btn-primary btn-sm" style="margin:0 12px;font-size:12px" onclick="fbOpenAccount()">Sign In</button>';
+    if(inp){ inp.style.visibility='hidden'; }
     return;
   }
+  if(inp){ inp.style.display='flex'; inp.style.visibility='hidden'; }
   await chatLoadConvList();
 }
 
@@ -14468,19 +14504,35 @@ async function chatLoadConvList(){
 
 async function chatOpen(id,name){
   _chatCurrentId=id;
+  // Show and activate the input bar
+  var inp=document.getElementById('msg-input-bar');
+  if(inp){
+    inp.style.display='flex';
+    inp.style.visibility='visible';
+  }
+  // Set header
   var title=document.getElementById('chat-title');
   var rb=document.getElementById('chat-report-btn');
-  var inp=document.getElementById('chat-input');
+  var delBtn=document.getElementById('chat-delete-btn');
   if(title) title.textContent=name||'Chat';
-  if(rb) rb.style.display='';
-  if(inp) inp.style.display='flex';
+  if(rb) rb.style.display='inline';
+  if(delBtn){ delBtn.style.display='inline'; delBtn.dataset.convId=id; }
+  // Refresh conv list highlight
   chatLoadConvList();
+  // Load messages
   var el=document.getElementById('chat-msgs');
-  el.innerHTML='<div class="spinner" style="margin:20px auto;display:block"></div>';
+  if(el) el.innerHTML='<div class="spinner" style="margin:20px auto;display:block"></div>';
   try{
     var msgs=await window._fb.getChatMessages(id);
     chatRenderMsgs(msgs);
-  }catch(e){ el.innerHTML='<p style="color:var(--red)">'+e.message+'</p>'; }
+  }catch(e){
+    if(el) el.innerHTML='<p style="color:var(--red);padding:14px">'+e.message+'</p>';
+  }
+  // Focus the input
+  setTimeout(function(){
+    var box=document.getElementById('msg-box');
+    if(box) box.focus();
+  },100);
 }
 
 function chatRenderMsgs(msgs){
@@ -14504,7 +14556,7 @@ function chatRenderMsgs(msgs){
 }
 
 async function chatSend(){
-  var inp=document.getElementById('chat-msg-box');
+  var inp=document.getElementById('msg-box');
   var text=(inp&&inp.value||'').trim();
   if(!text||!_chatCurrentId) return;
   inp.value='';
@@ -16424,7 +16476,7 @@ async function liveGamesLoad(){
       document.getElementById('home-live-games-title').textContent='&#127918; Live Games';
       var fmt=function(s){return Math.floor(s/60)+':'+(s%60<10?'0':'')+s%60;};
       el.innerHTML=games.map(function(g){
-        return '<div style="padding:8px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px">'
+        return '<div data-game-id="'+g.id+'" style="padding:8px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px">'
           +'<div style="font-size:12px;font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
           +g.whiteName.replace(/</g,'&lt;')+' <span style="color:var(--text2);font-weight:400">vs</span> '+g.blackName.replace(/</g,'&lt;')+'</div>'
           +'<div style="display:flex;gap:4px;font-size:11px;font-family:monospace;flex-shrink:0">'
@@ -16435,17 +16487,25 @@ async function liveGamesLoad(){
     } else {
       // No live games — show recent finished games
       document.getElementById('home-live-games-title').innerHTML='&#9812; Recent Games';
+      // Query for any ended games (status not 'active')  
       var r2=await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents:runQuery?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({structuredQuery:{from:[{collectionId:'onlineGames'}],
-          where:{fieldFilter:{field:{fieldPath:'status'},op:'EQUAL',value:{stringValue:'finished'}}},
-          orderBy:[{field:{fieldPath:'createdAt'},direction:'DESCENDING'}],limit:5}})
+          where:{compositeFilter:{op:'OR',filters:[
+            {fieldFilter:{field:{fieldPath:'status'},op:'EQUAL',value:{stringValue:'white_wins'}}},
+            {fieldFilter:{field:{fieldPath:'status'},op:'EQUAL',value:{stringValue:'black_wins'}}},
+            {fieldFilter:{field:{fieldPath:'status'},op:'EQUAL',value:{stringValue:'draw'}}}
+          ]}},
+          orderBy:[{field:{fieldPath:'lastMoveAt'},direction:'DESCENDING'}],limit:5}})
       });
       var docs2=await r2.json();
       var recent=(Array.isArray(docs2)?docs2:[docs2]).filter(function(d){return d.document;}).map(function(d){
         var f=d.document.fields||{};
         var g=function(k){var v=f[k];return v?(v.stringValue||v.integerValue||''):'';}; 
-        return {whiteName:g('whiteName'),blackName:g('blackName'),result:g('result'),tc:g('timeControl')};
+        var gid=d.document.name.split('/').pop();
+        var status=g('status');
+        var result=status==='white_wins'?'1-0':status==='black_wins'?'0-1':status==='draw'?'½-½':'?';
+        return {id:gid,whiteName:g('whiteName'),blackName:g('blackName'),result:result};
       });
       if(!recent.length){
         el.innerHTML='<div style="color:var(--text2);font-size:12px;text-align:center;padding:12px">No games yet. <a href="#" onclick="navTo(\'online\');return false" style="color:var(--accent)">Be the first!</a></div>';
@@ -16453,12 +16513,14 @@ async function liveGamesLoad(){
       }
       el.innerHTML=recent.map(function(g){
         var resColor=g.result==='1-0'?'#4ade80':g.result==='0-1'?'#f87171':'#facc15';
-        return '<div style="padding:7px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:6px">'
-          +'<div style="font-size:12px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
-          +g.whiteName.replace(/</g,'&lt;')+' vs '+g.blackName.replace(/</g,'&lt;')+'</div>'
-          +'<span style="font-size:11px;font-weight:700;color:'+resColor+';flex-shrink:0">'+g.result+'</span>'
-          +'</div>';
-      }).join('')+'<div style="text-align:center;padding:6px"><a href="#" onclick="navTo(\'online\');return false" style="font-size:11px;color:var(--accent)">Play Online &#8594;</a></div>';
+        var safeId=g.id||'';
+        var row='<div class="recent-game-row" style="padding:7px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:6px;cursor:pointer" title="Click to analyse">';
+        row+='<div style="font-size:12px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+g.whiteName.replace(/</g,'&lt;')+' vs '+g.blackName.replace(/</g,'&lt;')+'</div>';
+        row+='<span style="font-size:11px;font-weight:700;color:'+resColor+';flex-shrink:0">'+g.result+'</span>';
+        row+='<span style="font-size:10px;color:var(--text2);flex-shrink:0">&#128269;</span>';
+        row+='</div>';
+        return row;
+      }).join('')+'<div style="text-align:center;padding:6px"><a href="#" onclick="navTo(\'online\');return false" style="font-size:11px;color:var(--accent)">Play Online &rarr;</a></div>';
     }
   }catch(e){
     el.innerHTML='<div style="color:var(--text2);font-size:12px;padding:8px;text-align:center">Games unavailable.</div>';
@@ -17168,6 +17230,370 @@ async function _hashStr(str){
   };
 })();
 
+</script>
+
+
+<script>
+/* ════════════════════════════════════════════════════════════════
+   CHESS64 — Chat fix · Share tracking · Parental in admin ·
+             Puzzle stat sync · Admin stats refresh
+   ════════════════════════════════════════════════════════════════ */
+
+// ── CHAT: ensure input is always flex when conv selected ──────────
+// Patch chatOpen to guarantee the input area shows
+(function(){
+  var _orig = window.chatOpen;
+  window.chatOpen = async function(id, name){
+    // Show input BEFORE async operations
+    var inp = document.getElementById('msg-input-bar');
+    if(inp){
+      inp.style.display = 'flex';
+      inp.style.setProperty('display','flex','important');
+    }
+    if(_orig) await _orig(id, name);
+    // Ensure again after render
+    if(inp){ inp.style.display='flex'; inp.style.visibility='visible'; }
+    // Focus textarea
+    var box = document.getElementById('msg-box');
+    if(box) setTimeout(function(){ box.focus(); }, 100);
+  };
+})();
+
+// ── SHARE TRACKING ────────────────────────────────────────────────
+async function trackShareClick(){
+  try{
+    if(!window._fb || !window._fb.user || window._fb.user.isAnonymous) return;
+    var uid = window._fb.user.uid;
+    var tok = await window._fb.user.getIdToken();
+    // Get current count first
+    var r = await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q');
+    var d = await r.json();
+    var cur = (d.fields && d.fields.shareCount && d.fields.shareCount.integerValue) ? parseInt(d.fields.shareCount.integerValue) : 0;
+    await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=shareCount',{
+      method:'PATCH', headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+      body: JSON.stringify({fields:{shareCount:{integerValue:String(cur+1)}}})
+    });
+  }catch(e){}
+}
+
+// ── PUZZLE STAT SYNC ──────────────────────────────────────────────
+// Patch addPuzzleStat (or wherever puzzle completions are recorded)
+// so puzzles also sync to Firebase
+(function(){
+  var _origAddStat = window.addStat;
+  // Also hook puzzle-specific increment
+  var origIncrPz = null;
+  // Try to find and patch the puzzle stat call
+  // Puzzles call something like: s.pz++ then setSt
+  // We watch setSt for pz changes
+  var _prevPz = 0;
+  try{ _prevPz = (JSON.parse(localStorage.getItem('c64_stats')||'{}')).pz||0; }catch(e){}
+  
+  var _origSetSt = window.setSt;
+  window.setSt = function(s){
+    if(_origSetSt) _origSetSt(s);
+    // If pz changed, sync to Firebase
+    var newPz = s.pz||0;
+    if(newPz !== _prevPz){
+      _prevPz = newPz;
+      // Sync puzzle count
+      try{
+        if(window._fb&&window._fb.user&&!window._fb.user.isAnonymous){
+          window._fb.user.getIdToken().then(function(tok){
+            return fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+window._fb.user.uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=stats',{
+              method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+              body:JSON.stringify({fields:{stats:{stringValue:JSON.stringify(s)}}})
+            });
+          }).catch(function(){});
+        }
+      }catch(e){}
+    }
+  };
+})();
+
+
+// ── ADMIN: Parental controls visibility ──────────────────────────
+// Add a parental controls tab/section to admin panel
+(function(){
+  function injectParentalAdminPane(){
+    if(document.getElementById('adm-pane-parental')) return;
+    var tabsEl = document.querySelector('#fb-admin-box .fb-tabs-row, .fb-tabs-row');
+    // Find the tab container - look for adm-tab-reports
+    var reportsTab = document.getElementById('adm-tab-reports');
+    if(!reportsTab) return;
+    
+    // Add tab button
+    var tab = document.createElement('button');
+    tab.className = 'fb-tab';
+    tab.id = 'adm-tab-parental';
+    tab.textContent = '\uD83D\uDD12 Parental';
+    tab.style.cssText = 'flex:none;padding:5px 10px;font-size:11px';
+    tab.onclick = function(){ admShowParentalPane(); };
+    reportsTab.parentNode.insertBefore(tab, reportsTab.nextSibling);
+    
+    // Add pane
+    var reportsPane = document.getElementById('adm-pane-reports');
+    if(!reportsPane) return;
+    var pane = document.createElement('div');
+    pane.id = 'adm-pane-parental';
+    pane.style.display = 'none';
+    pane.innerHTML = '<button class="btn btn-primary btn-sm" onclick="admLoadParentalUsers()" style="margin-bottom:8px">&#128260; Load Users with Parental Controls</button>'
+      + '<div id="adm-parental-list" style="font-size:12px;max-height:340px;overflow-y:auto"><p style="color:var(--text2)">Click Load to see users with parental controls.</p></div>';
+    reportsPane.parentNode.insertBefore(pane, reportsPane);
+  }
+  setTimeout(injectParentalAdminPane, 1500);
+  var _o = window._onFbAuthChange;
+  window._onFbAuthChange = function(user, isAdmin){
+    if(_o) _o(user, isAdmin);
+    if(isAdmin) setTimeout(injectParentalAdminPane, 800);
+  };
+})();
+
+function admShowParentalPane(){
+  ['analytics','users','articles','broadcast','requests','reports','usernames','parental'].forEach(function(t){
+    var b=document.getElementById('adm-tab-'+t); var p=document.getElementById('adm-pane-'+t);
+    if(b) b.classList.toggle('active',t==='parental');
+    if(p) p.style.display=t==='parental'?'block':'none';
+  });
+}
+
+async function admLoadParentalUsers(){
+  var el = document.getElementById('adm-parental-list');
+  if(!el) return;
+  el.innerHTML = '<div style="color:var(--text2)">Loading...</div>';
+  try{
+    // Fetch users who have parentalControls field set in their Firestore doc
+    var r = await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents:runQuery?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({structuredQuery:{
+        from:[{collectionId:'users'}],
+        where:{fieldFilter:{field:{fieldPath:'parentalEnabled'},op:'EQUAL',value:{booleanValue:true}}},
+        limit:100
+      }})
+    });
+    var docs = await r.json();
+    var users = (Array.isArray(docs)?docs:[docs]).filter(function(d){return d.document;}).map(function(d){
+      var f=d.document.fields||{};
+      var uid=d.document.name.split('/').pop();
+      var g=function(k){var v=f[k];return v?(v.stringValue||v.booleanValue||v.integerValue||''):null;};
+      var blocked={};
+      try{blocked=JSON.parse(f.parentalBlocked&&f.parentalBlocked.stringValue||'{}');}catch(e){}
+      return {uid:uid,name:g('displayName')||'?',email:g('email')||'',blocked:blocked};
+    });
+    
+    if(!users.length){
+      el.innerHTML='<p style="color:var(--text2)">No users have parental controls enabled.</p>';
+      return;
+    }
+    
+    var labels={chat:'Messages',forums:'Forums',articles:'Articles',players:'Players',events:'Events'};
+    var html='';
+    users.forEach(function(u){
+      var blockedList=Object.keys(u.blocked).filter(function(k){return u.blocked[k];}).map(function(k){return labels[k]||k;});
+      var blockedStr=blockedList.length?'<span style="color:var(--red)">'+blockedList.join(', ')+'</span>':'<span style="color:var(--green)">None</span>';
+      html+='<div style="padding:9px;border-bottom:1px solid var(--border)">';
+      html+='<div style="font-weight:600;font-size:12px">'+u.name.replace(/</g,'&lt;')+'</div>';
+      html+='<div style="font-size:11px;color:var(--text2);margin-bottom:5px">'+u.email+'</div>';
+      html+='<div style="font-size:11px;margin-bottom:6px">Blocked: '+blockedStr+'</div>';
+      var safeUid=u.uid||''; var safeName=u.name.replace(/</g,'&lt;').replace(/"/g,'&quot;');
+      html+='<button class="btn btn-ghost btn-sm" style="font-size:10px;color:var(--red)" data-uid="'+safeUid+'" data-name="'+safeName+'" onclick="admResetParental(this.dataset.uid,this.dataset.name)">&#128275; Reset</button>';
+      html+='</div>';
+    });
+    el.innerHTML=html;
+  }catch(e){
+    el.innerHTML='<p style="color:var(--red)">'+e.message+'</p>';
+  }
+}
+
+async function admResetParental(uid, name){
+  if(!confirm('Reset parental controls for "'+name+'"? This will disable them.')) return;
+  try{
+    var tok = await window._fb.user.getIdToken();
+    await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=parentalEnabled&updateMask.fieldPaths=parentalBlocked',{
+      method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+      body:JSON.stringify({fields:{parentalEnabled:{booleanValue:false},parentalBlocked:{stringValue:'{}'}}})
+    });
+    showToast('Parental controls reset for '+name);
+    admLoadParentalUsers();
+  }catch(e){ showToast('Error: '+e.message); }
+}
+
+// ── PARENTAL: sync enabled state to Firebase so admin can see it ──
+// Patch parentalConfirmEnable and parentalDisablePrompt
+var _origConfirmEnable = window.parentalConfirmEnable;
+window.parentalConfirmEnable = async function(){
+  if(_origConfirmEnable) await _origConfirmEnable();
+  // After enabling, sync to Firebase
+  try{
+    if(!window._fb||!window._fb.user||window._fb.user.isAnonymous) return;
+    var tok = await window._fb.user.getIdToken();
+    var state = _parentalState||{};
+    await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+window._fb.user.uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=parentalEnabled&updateMask.fieldPaths=parentalBlocked',{
+      method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+      body:JSON.stringify({fields:{
+        parentalEnabled:{booleanValue:true},
+        parentalBlocked:{stringValue:JSON.stringify(state.blocked||{})}
+      }})
+    });
+  }catch(e){}
+};
+
+// ── ADMIN: refresh stats after fbLoadAdminUsers ───────────────────
+// The getAnalytics already reads stats from Firebase, but we need 
+// to ensure lastSeen is written on every session
+(function(){
+  // Write lastSeen on sign-in
+  var _o = window._onFbAuthChange;
+  window._onFbAuthChange = function(user, isAdmin){
+    if(_o) _o(user, isAdmin);
+    if(user && !user.isAnonymous){
+      // Update lastSeen in Firestore
+      user.getIdToken().then(function(tok){
+        return fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+user.uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=lastSeen',{
+          method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+          body:JSON.stringify({fields:{lastSeen:{timestampValue:new Date().toISOString()}}})
+        });
+      }).catch(function(){});
+      
+      // Also load stats from Firebase into localStorage (in case user plays on multiple devices)
+      setTimeout(function(){
+        fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+user.uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q')
+          .then(function(r){return r.json();})
+          .then(function(d){
+            if(d.fields&&d.fields.stats&&d.fields.stats.stringValue){
+              var remoteStats=JSON.parse(d.fields.stats.stringValue);
+              var localStats=JSON.parse(localStorage.getItem('c64_stats')||'{}');
+              // Merge: take max of each field
+              var merged={};
+              ['g','w','l','d','pz'].forEach(function(k){
+                merged[k]=Math.max(remoteStats[k]||0,localStats[k]||0);
+              });
+              if(remoteStats.elo) merged.elo=remoteStats.elo;
+              localStorage.setItem('c64_stats',JSON.stringify(merged));
+              if(typeof updateStatDisplay==='function') updateStatDisplay();
+            }
+          }).catch(function(){});
+      }, 1000);
+    }
+  };
+})();
+
+
+function admFilterUsers(q){
+  var query=(q||'').toLowerCase();
+  document.querySelectorAll('#fb-admin-users .admin-user-row').forEach(function(row){
+    row.style.display=(!query||( row.dataset.userSearch||'').indexOf(query)>-1)?'':'none';
+  });
+}
+
+</script>
+
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   CHESS64 — Chat delete (user-side only, admin keeps copy)
+   ══════════════════════════════════════════════════════════════ */
+
+// Delete a chat conversation ON USER'S SIDE ONLY
+// We don't delete from Firestore - just mark it hidden for this user
+// Admin can still view all chats
+async function chatDeleteForMe(convId){
+  if(!convId) return;
+  if(!confirm('Delete this conversation? It will be removed from your view but admin can still see it.')) return;
+  try{
+    var uid = window._fb&&window._fb.user ? window._fb.user.uid : null;
+    if(!uid) return;
+    // Store "hidden for user" list in their own user doc
+    var hiddenKey = 'hiddenChats';
+    var tok = await window._fb.user.getIdToken();
+    // Get current hidden list
+    var r = await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q');
+    var d = await r.json();
+    var hiddenList = [];
+    try{ hiddenList = JSON.parse((d.fields&&d.fields.hiddenChats&&d.fields.hiddenChats.stringValue)||'[]'); }catch(e){}
+    if(!hiddenList.includes(convId)) hiddenList.push(convId);
+    // Save updated list
+    await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=hiddenChats',{
+      method:'PATCH', headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+      body: JSON.stringify({fields:{hiddenChats:{stringValue:JSON.stringify(hiddenList)}}})
+    });
+    // Clear the UI
+    _chatCurrentId = null;
+    var inp = document.getElementById('msg-input-bar');
+    if(inp){ inp.style.visibility='hidden'; }
+    var title = document.getElementById('chat-title');
+    if(title) title.textContent = 'Select a conversation';
+    var msgs = document.getElementById('chat-msgs');
+    if(msgs) msgs.innerHTML = '<div style="text-align:center;color:var(--text2);font-size:13px;margin-top:40px">Select or start a conversation</div>';
+    var delBtn = document.getElementById('chat-delete-btn');
+    if(delBtn) delBtn.style.display='none';
+    var rb = document.getElementById('chat-report-btn');
+    if(rb) rb.style.display='none';
+    showToast('Conversation removed from your view.');
+    // Reload conversation list (without the deleted one)
+    chatLoadConvList();
+  }catch(e){ showToast('Error: '+e.message); }
+}
+
+// Patch chatLoadConvList to filter out hidden conversations
+(function(){
+  var _orig = window.chatLoadConvList;
+  window.chatLoadConvList = async function(){
+    // First get hidden list for this user
+    var hiddenList = [];
+    try{
+      var uid = window._fb&&window._fb.user ? window._fb.user.uid : null;
+      if(uid){
+        var r = await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q');
+        var d = await r.json();
+        hiddenList = JSON.parse((d.fields&&d.fields.hiddenChats&&d.fields.hiddenChats.stringValue)||'[]');
+      }
+    }catch(e){}
+    window._hiddenChats = hiddenList;
+    if(_orig) await _orig();
+    // After rendering, hide conversations the user deleted
+    if(hiddenList.length){
+      document.querySelectorAll('#chat-conv-list [data-conv-id]').forEach(function(el){
+        if(hiddenList.includes(el.dataset.convId)) el.style.display='none';
+      });
+    }
+  };
+})();
+
+// Patch conv list render to add data-conv-id to each item
+(function(){
+  // chatLoadConvList builds innerHTML via convs.map
+  // We can't easily patch that, so instead observe DOM changes
+  var observer = new MutationObserver(function(){
+    document.querySelectorAll('#chat-conv-list > div').forEach(function(el){
+      if(!el.dataset.convId){
+        // Extract conv ID from the onclick
+        var onclick = el.getAttribute('onclick')||'';
+        var m = onclick.match(/chatOpen\(['"]([^'"]+)['"]/);
+        if(m) el.dataset.convId = m[1];
+      }
+    });
+    // Apply hidden filter
+    if(window._hiddenChats&&window._hiddenChats.length){
+      document.querySelectorAll('#chat-conv-list [data-conv-id]').forEach(function(el){
+        if(window._hiddenChats.includes(el.dataset.convId)) el.style.display='none';
+      });
+    }
+  });
+  var convList = document.getElementById('chat-conv-list');
+  if(convList) observer.observe(convList, {childList:true, subtree:false});
+  // Also try after navigation
+  var _o = window.navTo;
+  window.navTo = function(p){
+    if(_o) _o(p);
+    if(p==='chat'){
+      setTimeout(function(){
+        var cl = document.getElementById('chat-conv-list');
+        if(cl && !cl._observed){ cl._observed=true; observer.observe(cl,{childList:true}); }
+      },200);
+    }
+  };
+})();
 </script>
 
 </body></html>
