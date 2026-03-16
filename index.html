@@ -25,9 +25,9 @@
 <meta property="og:type" content="website">
 <meta property="og:title" content="Chess64 — Free Chess Platform | Play, Puzzles, Analysis">
 <meta property="og:description" content="The most beautiful free chess platform. Play against AI bots, solve real Lichess puzzles, explore openings with live database, analyze with Stockfish. No account needed!">
-<meta property="og:url" content="https://chess64.app">
+<meta property="og:url" content="https://pytheorem07.github.io/Chess64.app/">
 <meta property="og:site_name" content="Chess64">
-<meta property="og:image" content="https://chess64.app/og-image.png">
+<meta property="og:image" content="https://pytheorem07.github.io/Chess64.app/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Chess64 - Free Online Chess Platform">
@@ -36,13 +36,13 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Chess64 — Free Chess Platform">
 <meta name="twitter:description" content="Play chess free online. AI bots with personalities, Lichess puzzles, Stockfish analysis, opening explorer. No sign-up!">
-<meta name="twitter:image" content="https://chess64.app/og-image.png">
+<meta name="twitter:image" content="https://pytheorem07.github.io/Chess64.app/og-image.png">
 <meta name="twitter:site" content="@chess64app">
 <!-- Structured Data -->
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"Chess64","url":"https://chess64.app","description":"Free online chess platform with AI opponents, puzzles, analysis, opening explorer, and learning tools","applicationCategory":"GameApplication","genre":"Chess","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"featureList":["Play vs AI bots","Chess puzzles","Opening explorer","Stockfish analysis","Repertoire trainer","Chess960"],"operatingSystem":"Any"}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"Chess64","url":"https://pytheorem07.github.io/Chess64.app/","description":"Free online chess platform with AI opponents, puzzles, analysis, opening explorer, and learning tools","applicationCategory":"GameApplication","genre":"Chess","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"featureList":["Play vs AI bots","Chess puzzles","Opening explorer","Stockfish analysis","Repertoire trainer","Chess960"],"operatingSystem":"Any"}</script>
 <!-- Canonical -->
-<link rel="canonical" href="https://chess64.app">
-<link rel="alternate" hreflang="en" href="https://chess64.app">
+<link rel="canonical" href="https://pytheorem07.github.io/Chess64.app/">
+<link rel="alternate" hreflang="en" href="https://pytheorem07.github.io/Chess64.app/">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#9819;</text></svg>">
 <style>
 :root{--bg:#0d0f14;--bg2:#161b22;--bg3:#21262d;--card:#1c2128;--border:#30363d;--text:#e6edf3;--text2:#8b949e;--accent:#58a6ff;--green:#3fb950;--red:#f85149;--gold:#d29922;--purple:#8b5cf6;--radius:10px;--bsz:64px}
@@ -554,6 +554,16 @@ window._fb = {
   },
 
   // ── CHAT ────────────────────────────────────────────────────
+  async adminDeleteChat(chatId){
+    if(!_isAdmin||!_db) return;
+    // Delete all messages in the chat subcollection
+    try{
+      const msgsSnap = await getDocs(collection(_db,'chats',chatId,'messages'));
+      for(const d of msgsSnap.docs){ await deleteDoc(d.ref); }
+    }catch(e){}
+    // Delete the chat document itself
+    await deleteDoc(doc(_db,'chats',chatId));
+  },
   async getAllConversationsAdmin(){
     if(!_isAdmin||!_db) return [];
     try{
@@ -1315,6 +1325,24 @@ if(_fbReady && _auth){
     // Tell the rest of the app auth changed
     if(typeof window._onFbAuthChange === 'function') window._onFbAuthChange(user, _isAdmin);
   });
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Chess64",
+  "url": "https://pytheorem07.github.io/Chess64.app/",
+  "description": "Free online chess platform. Play chess against AI bots, solve puzzles, analyse games, join online multiplayer, read chess articles, and more.",
+  "applicationCategory": "Game",
+  "genre": "Chess",
+  "operatingSystem": "Any",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "keywords": "chess, free chess, play chess online, chess puzzles, chess analysis, chess community"
 }
 </script>
 </head>
@@ -11823,7 +11851,7 @@ function artPreview(){
       <p style="color:var(--text2);font-size:13px;margin:8px 0 14px">The best way to support Chess64 is to share it with fellow chess players and send feedback!</p>
       <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
         <button class="btn btn-primary" onclick="navTo('feedback')">&#128172; Send Feedback</button>
-        <button class="btn btn-ghost" onclick="try{trackShareClick();navigator.share({title:'Chess64',url:'https://pytheorem07.github.io/Chess64.app/',text:'Free chess with AI bots, puzzles, and analysis'})}catch(e){navigator.clipboard.writeText('https://chess64.app').then(()=>alert('Link copied!'))}">&#128279; Share Chess64</button>
+        <button class="btn btn-ghost" onclick="try{trackShareClick();navigator.share({title:'Chess64',url:'https://pytheorem07.github.io/Chess64.app/',text:'Free chess with AI bots, puzzles, and analysis'})}catch(e){navigator.clipboard.writeText('https://pytheorem07.github.io/Chess64.app/').then(()=>alert('Link copied!'))}">&#128279; Share Chess64</button>
       </div>
     </div>
   </div>
@@ -14268,7 +14296,7 @@ function lbShowBotData(){
           ? '<button class="btn btn-ghost btn-sm" style="font-size:9px;padding:1px 5px;margin-left:3px" onclick="event.stopPropagation();openGameInAnalysis(\'' + g.id + '\')" title="Analyse">&#128269;</button>'
           : '';
         var clickAttr = g.status!=='active' && g.id ? 'style="border-bottom:1px solid var(--border);cursor:pointer" onclick="openGameInAnalysis(\'' + g.id + '\')"' : 'style="border-bottom:1px solid var(--border)"';
-        return '<tr ' + clickAttr + '>'          +'<td style="padding:5px">'+(opp||'?').replace(/</g,'&lt;')+'</td>'          +'<td style="text-align:center">'+(g.mins||'?')+'+'+( g.inc||0)+'</td>'          +'<td style="text-align:center;color:'+resultColor+';font-weight:700">'+resultTxt+' '+resumeBtn+analyseBtn+'</td>'          +'<td style="text-align:center;color:var(--text2)">'+date+'</td>'          +'</tr>';
+        return '<tr ' + clickAttr + '>'          +'<td style="padding:5px">'+(opp||'?').replace(/</g,'&lt;')+'</td>'          +'<td style="text-align:center">'+(g.mins||'?')+'+'+( g.inc||0)+'</td>'          +'<td style="text-align:center;color:'+resultColor+';font-weight:700">'+resultTxt+' '+resumeBtn+analyseBtn+copyBtn+'</td>'          +'<td style="text-align:center;color:var(--text2)">'+date+'</td>'          +'</tr>';
     }).join('')+'</tbody></table>';
 }
 
@@ -15170,13 +15198,14 @@ async function olLoadRecent(){
         else if(g.status==='active'){resultTxt='Active';resultColor='var(--accent)';}
         var date=g.createdAt&&g.createdAt.toDate?g.createdAt.toDate().toLocaleDateString():'';
         var resumeBtn=g.status==='active'?'<button class="btn btn-primary btn-sm" style="font-size:10px;padding:1px 6px" onclick="olResumeGame(\''+g.id+'\',\''+( iAmW?'w':'b')+'\',\''+opp.replace(/'/g,'')+'\')">\u25B6 Resume</button>':'';
+        var copyBtn = g.id && g.status!=='active' ? '<button class="btn btn-ghost btn-sm" style="font-size:9px;padding:1px 5px;margin-left:2px" onclick="event.stopPropagation();olCopyGamePgnById(\'' + g.id + '\')" title="Copy PGN">&#128203;</button>' : '';
         var analyseBtn = g.status!=='active' && g.id ? ' <button class="btn btn-ghost btn-sm" style="font-size:9px;padding:1px 5px" onclick="event.stopPropagation();openGameInAnalysis(\'' + g.id + '\')">&#128269;</button>' : '';
         var trStyle = g.status!=='active' && g.id ? 'border-bottom:1px solid var(--border);cursor:pointer' : 'border-bottom:1px solid var(--border)';
         var trClick = g.status!=='active' && g.id ? ' onclick="openGameInAnalysis(\'' + g.id + '\')"' : '';
         return '<tr style="'+trStyle+'"' + trClick + '>'
           +'<td style="padding:5px">'+(opp||'?').replace(/</g,'&lt;')+'</td>'
           +'<td style="text-align:center">'+(g.mins||'?')+'+'+( g.inc||0)+'</td>'
-          +'<td style="text-align:center;color:'+resultColor+';font-weight:700">'+resultTxt+' '+resumeBtn+analyseBtn+'</td>'
+          +'<td style="text-align:center;color:'+resultColor+';font-weight:700">'+resultTxt+' '+resumeBtn+analyseBtn+copyBtn+'</td>'
           +'<td style="text-align:center;color:var(--text2)">'+date+'</td>'
           +'</tr>';
       }).join('')+'</table>';
@@ -16646,18 +16675,21 @@ async function _fbCheckRenameStatus(){
   var info=document.getElementById('fb-rename-info'); if(!info) return;
   try{
     var u=window._fb&&window._fb.user; if(!u) return;
-    var r=await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+u.uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q');
+    var tok=await u.getIdToken();
+    var r=await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+u.uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
+      headers:{'Authorization':'Bearer '+tok}
+    });
     var d=await r.json();
-    var usedFree=d.fields&&d.fields.usedFreeRename&&d.fields.usedFreeRename.booleanValue===true;
-    var adminOk=d.fields&&d.fields.usernameChangeAllowed&&d.fields.usernameChangeAllowed.booleanValue===true;
-    var approved=d.fields&&d.fields.approvedUsername&&d.fields.approvedUsername.stringValue||'';
-    window._renameState={usedFree,adminOk,approved};
-    if(!usedFree) info.textContent='&#10003; You have one free username change.';
-    else if(adminOk) info.textContent='&#10003; Admin approved: you can change to "'+(approved||'your chosen name')+'".';
-    else info.textContent='Free rename used. Submitting will send a request to admin for approval.';
+    var usedFree=!!(d.fields&&d.fields.usedFreeRename&&d.fields.usedFreeRename.booleanValue===true);
+    var adminOk=!!(d.fields&&d.fields.usernameChangeAllowed&&d.fields.usernameChangeAllowed.booleanValue===true);
+    var approved=(d.fields&&d.fields.approvedUsername&&d.fields.approvedUsername.stringValue)||'';
+    window._renameState={usedFree:usedFree,adminOk:adminOk,approved:approved};
+    if(!usedFree) info.innerHTML='You can change your username <strong>once</strong>. After that you must request admin approval.';
+    else if(adminOk) info.innerHTML='&#10003; Admin approved: change to <strong>'+(approved||'requested name')+'</strong>.';
+    else info.textContent='Free rename already used. Submit a request for admin approval.';
   }catch(e){
-    if(info) info.textContent='One free rename available.';
-    window._renameState={usedFree:false,adminOk:false,approved:''};
+    if(info) info.textContent='Checking...';
+    window._renameState={usedFree:true,adminOk:false,approved:''};
   }
 }
 
@@ -16865,30 +16897,7 @@ function openGameInAnalysis(gameId){
 })();
 
 // ── Username rename: enforce once strictly ────────────────────────
-// Override _fbCheckRenameStatus to always re-check from server
-var _origCheckRename = window._fbCheckRenameStatus;
-window._fbCheckRenameStatus = async function(){
-  var info=document.getElementById('fb-rename-info'); if(!info) return;
-  try{
-    var u=window._fb&&window._fb.user; if(!u) return;
-    var r=await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+u.uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q');
-    var d=await r.json();
-    var usedFree=d.fields&&d.fields.usedFreeRename&&d.fields.usedFreeRename.booleanValue===true;
-    var adminOk=d.fields&&d.fields.usernameChangeAllowed&&d.fields.usernameChangeAllowed.booleanValue===true;
-    var approved=d.fields&&d.fields.approvedUsername&&d.fields.approvedUsername.stringValue||'';
-    window._renameState={usedFree:usedFree,adminOk:adminOk,approved:approved};
-    if(!usedFree){
-      info.innerHTML='You can change your username <strong>once</strong>. After that, you must submit a request for admin approval.';
-    } else if(adminOk){
-      info.innerHTML='&#10003; Admin approved your name change to "<strong>'+(approved||'your chosen name')+'</strong>". This uses your admin approval.';
-    } else {
-      info.innerHTML='You have already used your free rename. Submit a request below for admin approval.';
-    }
-  }catch(e){
-    if(info) info.textContent='One free rename available.';
-    window._renameState={usedFree:false,adminOk:false,approved:''};
-  }
-};
+// _fbCheckRenameStatus uses authenticated fetch (defined above)
 
 // ── Admin user search ─────────────────────────────────────────────
 (function(){
@@ -17713,6 +17722,230 @@ async function admViewChatMessages(chatId){
     }).join('');
   }catch(e){ body.innerHTML = '<p style="color:var(--red)">'+e.message+'</p>'; }
 }
+</script>
+
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   CHESS64 — Admin pane close buttons · Delete account · Bot lb fix ·
+             Admin chat search/delete · Copy PGN by ID
+   ═══════════════════════════════════════════════════════════════════ */
+
+// ── COPY PGN BY GAME ID (for olLoadRecent) ────────────────────────
+async function olCopyGamePgnById(gameId){
+  try{
+    var r = await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/onlineGames/'+gameId+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q');
+    var d = await r.json();
+    var f = d.fields||{};
+    var arrVal = function(k){ return (f[k]&&f[k].arrayValue&&f[k].arrayValue.values)||[]; };
+    var strVal = function(k){ return (f[k]&&f[k].stringValue)||''; };
+    var sanMoves = arrVal('sanMoves').map(function(v){return v.stringValue||'';});
+    var moves = sanMoves.length ? sanMoves : arrVal('moves').map(function(v){return v.stringValue||'';});
+    var white = strVal('whiteName')||'White';
+    var black = strVal('blackName')||'Black';
+    var pgn = '[White "'+white+'"]\n[Black "'+black+'"]\n\n';
+    for(var i=0;i<moves.length;i+=2){
+      pgn += (Math.floor(i/2)+1)+'. '+(moves[i]||'');
+      if(moves[i+1]) pgn += ' '+moves[i+1];
+      pgn += ' ';
+    }
+    if(navigator.clipboard){ await navigator.clipboard.writeText(pgn.trim()); }
+    else{ var ta=document.createElement('textarea'); ta.value=pgn.trim(); document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); }
+    showToast('&#128203; PGN copied!');
+  }catch(e){ showToast('Error: '+e.message); }
+}
+
+// ── ADMIN PANES: add close (×) buttons ───────────────────────────
+// Patch injectParentalAdminPane and injectChatsTab to add close buttons
+(function(){
+  // Poll until panes exist and add close buttons
+  function addCloseBtns(){
+    ['parental','chats'].forEach(function(name){
+      var pane = document.getElementById('adm-pane-'+name);
+      if(pane && !pane.dataset.hasClose){
+        pane.dataset.hasClose='1';
+        var closeBtn = document.createElement('button');
+        closeBtn.style.cssText='float:right;background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;margin-bottom:4px;line-height:1';
+        closeBtn.innerHTML='&#10005;';
+        closeBtn.title='Close';
+        closeBtn.onclick = function(){
+          pane.style.display='none';
+          var tab = document.getElementById('adm-tab-'+name);
+          if(tab) tab.classList.remove('active');
+        };
+        pane.insertBefore(closeBtn, pane.firstChild);
+      }
+    });
+  }
+  setInterval(addCloseBtns, 1000);
+})();
+
+// ── ADMIN CHATS: search + delete ─────────────────────────────────
+// Patch admLoadAllChats to add search and delete buttons
+(function(){
+  var _orig = window.admLoadAllChats;
+  window.admLoadAllChats = async function(){
+    var el = document.getElementById('adm-chats-list');
+    if(!el) return;
+    el.innerHTML = '<div style="color:var(--text2)">Loading...</div>';
+    try{
+      var convs = await window._fb.getAllConversationsAdmin();
+      if(!convs || !convs.length){
+        el.innerHTML = '<p style="color:var(--text2)">No conversations found.</p>';
+        return;
+      }
+      // Store for search
+      window._admChatsData = convs;
+      admRenderChats(convs, '');
+      // Add search bar if not present
+      var pane = document.getElementById('adm-pane-chats');
+      if(pane && !document.getElementById('adm-chat-search')){
+        var sb = document.createElement('div');
+        sb.style.cssText = 'margin-bottom:8px';
+        sb.innerHTML = '<input id="adm-chat-search" type="text" placeholder="&#128269; Search by user or message..." '
+          +'style="width:100%;padding:7px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px" '
+          +'oninput="admSearchChats(this.value)">';
+        el.before(sb);
+      }
+    }catch(e){ el.innerHTML = '<p style="color:var(--red)">'+e.message+'</p>'; }
+  };
+})();
+
+function admRenderChats(convs, filter){
+  var el = document.getElementById('adm-chats-list');
+  if(!el) return;
+  var esc = function(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
+  var q = (filter||'').toLowerCase();
+  var filtered = q ? convs.filter(function(cv){
+    var members = (cv.memberNames||cv.members||[]).join(' ').toLowerCase();
+    var last = (cv.lastMsg||'').toLowerCase();
+    return members.indexOf(q)>-1 || last.indexOf(q)>-1 || (cv.name||'').toLowerCase().indexOf(q)>-1;
+  }) : convs;
+  if(!filtered.length){ el.innerHTML = '<p style="color:var(--text2)">No matching conversations.</p>'; return; }
+  var html = '';
+  filtered.forEach(function(cv){
+    var members = esc((cv.memberNames||cv.members||[]).join(', ')).slice(0,80);
+    var lastMsg = esc(cv.lastMsg ? cv.lastMsg.slice(0,60) : '—');
+    var cvName = esc(cv.name||cv.type||'Chat');
+    var cvId = (cv.id||'').replace(/'/g,'');
+    html += '<div style="padding:9px;border-bottom:1px solid var(--border)">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start">';
+    html += '<div style="font-weight:600;font-size:12px">'+cvName+'</div>';
+    html += '<div style="display:flex;gap:4px">';
+    html += '<span style="font-size:10px;color:var(--text2)">'+(cv.type||'dm')+'</span>';
+    html += '<button class="btn btn-ghost btn-sm" style="font-size:9px;padding:1px 5px;color:var(--red)" data-id="'+cvId+'" onclick="admDeleteConversation(this.dataset.id)">&#128465;</button>';
+    html += '</div></div>';
+    html += '<div style="font-size:11px;color:var(--text2);margin-bottom:4px">Members: '+members+'</div>';
+    html += '<div style="font-size:11px;margin-bottom:5px">Last: <em>'+lastMsg+'</em></div>';
+    html += '<button class="btn btn-ghost btn-sm" style="font-size:10px" data-id="'+cvId+'" onclick="admViewChatMessages(this.dataset.id)">&#128214; View</button>';
+    html += '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function admSearchChats(q){
+  var convs = window._admChatsData || [];
+  admRenderChats(convs, q);
+}
+
+async function admDeleteConversation(chatId){
+  if(!chatId) return;
+  if(!confirm('Permanently delete this conversation and all its messages?')) return;
+  try{
+    // Delete messages subcollection first via Firebase SDK
+    await window._fb.adminDeleteChat(chatId);
+    showToast('Conversation deleted.');
+    admLoadAllChats();
+  }catch(e){ showToast('Error: '+e.message); }
+}
+
+// ── DELETE ACCOUNT ────────────────────────────────────────────────
+// Add delete button to user's own account panel
+(function(){
+  var _o = window._onFbAuthChange;
+  window._onFbAuthChange = function(user, isAdmin){
+    if(_o) _o(user, isAdmin);
+    if(user && !user.isAnonymous){
+      setTimeout(function(){
+        var signedIn = document.getElementById('fb-signed-in');
+        if(signedIn && !document.getElementById('fb-delete-account-btn')){
+          var row = document.createElement('div');
+          row.style.cssText = 'text-align:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)';
+          row.innerHTML = '<button id="fb-delete-account-btn" onclick="fbDeleteMyAccount()" '
+            +'style="background:none;border:none;color:var(--red);font-size:11px;cursor:pointer;text-decoration:underline">'
+            +'Delete My Account</button>';
+          signedIn.appendChild(row);
+        }
+      },500);
+    }
+  };
+})();
+
+async function fbDeleteMyAccount(){
+  if(!confirm('⚠️ Permanently delete your account? This cannot be undone. All your data will be removed.')) return;
+  var confirm2 = prompt('Type DELETE to confirm:');
+  if(confirm2 !== 'DELETE'){ showToast('Cancelled.'); return; }
+  try{
+    var u = window._fb && window._fb.user;
+    if(!u) throw new Error('Not signed in');
+    var tok = await u.getIdToken();
+    var uid = u.uid;
+    // Delete user data from Firestore
+    for(var col of ['users','ratings','presence','matchQueue']){
+      await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/'+col+'/'+uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
+        method:'DELETE', headers:{'Authorization':'Bearer '+tok}
+      }).catch(function(){});
+    }
+    // Delete Auth account
+    await fetch('https://identitytoolkit.googleapis.com/v1/accounts:delete?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({idToken:tok})
+    });
+    showToast('Account deleted. Goodbye!');
+    setTimeout(function(){ window.location.reload(); }, 2000);
+  }catch(e){ showToast('Error: '+e.message+'. You may need to sign in again first.'); }
+}
+
+// Admin: delete any user's account
+async function admDeleteUserAccount(uid, name){
+  if(!confirm('Delete account for "'+name+'"? This removes their Firestore data. Their Auth account may need manual deletion in Firebase Console.')) return;
+  try{
+    var tok = await window._fb.user.getIdToken();
+    for(var col of ['users','ratings','presence','matchQueue','usernameRequests','bloggerRequests']){
+      await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/'+col+'/'+uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
+        method:'DELETE', headers:{'Authorization':'Bearer '+tok}
+      }).catch(function(){});
+    }
+    showToast(name+' account data deleted. Auth must be removed in Firebase Console.');
+    if(typeof fbLoadAdminUsers==='function') fbLoadAdminUsers();
+  }catch(e){ showToast('Error: '+e.message); }
+}
+
+// ── LEADERBOARD: fix bot select loading ──────────────────────────
+// The bot select renders before window.BOTS is available
+// Patch lbRenderBots to always have fresh bot list
+(function(){
+  var _origLbRenderBots = window.lbRenderBots;
+  window.lbRenderBots = function(){
+    var el = document.getElementById('lb-content');
+    if(!el) return;
+    // Build bot options from BOTS array (may be loaded now)
+    var bots = window.BOTS || [];
+    var botOptions = '<option value="">— All Bots —</option>'
+      + bots.map(function(b){ return '<option value="'+(b.id||b.name)+'">'+(b.name||b.id)+'</option>'; }).join('');
+    el.innerHTML = '<div style="margin-bottom:10px">'
+      +'<label style="font-size:12px;color:var(--text2);margin-right:6px">Bot:</label>'
+      +'<select id="lb-bot-sel" onchange="lbShowBotData()" style="padding:6px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">'
+      +botOptions+'</select></div>'
+      +'<div style="margin-bottom:8px;font-size:12px;font-weight:700;color:var(--text2)">MOST GAMES vs BOT</div>'
+      +'<div id="lb-bot-table"></div>';
+    // If no bots found yet, retry after BOTS loads
+    if(!bots.length){
+      setTimeout(function(){ if(document.getElementById('lb-content')) window.lbRenderBots(); }, 500);
+    }
+  };
+})();
+
 </script>
 
 </body></html>
