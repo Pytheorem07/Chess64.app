@@ -554,6 +554,16 @@ window._fb = {
   },
 
   // ── CHAT ────────────────────────────────────────────────────
+  async getAllConversationsAdmin(){
+    if(!_isAdmin||!_db) return [];
+    try{
+      const snap = await getDocs(query(collection(_db,'chats'), orderBy('lastAt','desc'), limit(50)));
+      return snap.docs.map(d=>({id:d.id,...d.data()}));
+    }catch(e){
+      const snap = await getDocs(query(collection(_db,'chats'), limit(50)));
+      return snap.docs.map(d=>({id:d.id,...d.data()}));
+    }
+  },
   async getConversations(){
     if(!_fbUser||!_db) return [];
     try{
@@ -1239,7 +1249,7 @@ window._fb = {
     if(!_isAdmin || !_db) return null;
     // Users count + recent activity
     const usersSnap = await getDocs(collection(_db,'users'));
-    const users = usersSnap.docs.map(d=>({uid:d.id,...d.data()}));
+    const users = usersSnap.docs.map(d=>({uid:d.id,id:d.id,...d.data()}));
     const now = Date.now();
     const day = 86400000;
     const activeToday   = users.filter(u=>u.lastSeen?.toMillis?.()>now-day).length;
@@ -14492,7 +14502,7 @@ async function chatLoadConvList(){
     el.innerHTML=convs.map(function(cv){
       var nm=(cv.name||(cv.type==='dm'?'Direct Message':'Group')).replace(/</g,'&lt;');
       var active=cv.id===_chatCurrentId;
-      return '<div onclick="chatOpen(\''+cv.id+'\',\''+nm.replace(/'/g,'\'')+'\')" '
+      return '<div data-conv-id="'+cv.id+'" onclick="chatOpen(\''+cv.id+'\',\''+nm.replace(/'/g,'\'')+'\')" '
         +'style="padding:9px 11px;cursor:pointer;border-radius:7px;margin-bottom:2px;background:'+(active?'var(--bg3)':'')+';">'
         +'<div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+nm+'</div>'
         +'<div style="font-size:11px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(cv.lastMsg||'').replace(/</g,'&lt;')+'</div>'
@@ -16463,7 +16473,7 @@ async function liveGamesLoad(){
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({structuredQuery:{from:[{collectionId:'onlineGames'}],
         where:{fieldFilter:{field:{fieldPath:'status'},op:'EQUAL',value:{stringValue:'active'}}},
-        orderBy:[{field:{fieldPath:'createdAt'},direction:'DESCENDING'}],limit:6}})
+        limit:20}})
     });
     var docs=await r.json();
     var games=(Array.isArray(docs)?docs:[docs]).filter(function(d){return d.document;}).map(function(d){
@@ -16495,7 +16505,7 @@ async function liveGamesLoad(){
           method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify({structuredQuery:{from:[{collectionId:'onlineGames'}],
             where:{fieldFilter:{field:{fieldPath:'status'},op:'EQUAL',value:{stringValue:status}}},
-            orderBy:[{field:{fieldPath:'createdAt'},direction:'DESCENDING'}],limit:3}})
+            limit:10}})
         });
         return await resp.json();
       };
@@ -17386,24 +17396,14 @@ async function admLoadParentalUsers(){
   if(!el) return;
   el.innerHTML = '<div style="color:var(--text2)">Loading...</div>';
   try{
-    // Fetch users who have parentalControls field set in their Firestore doc
-    // Fetch all users and filter client-side (avoids needing a Firestore index)
-    var r = await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents:runQuery?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({structuredQuery:{from:[{collectionId:'users'}],limit:500}})
-    });
-    var allDocs = await r.json();
-    // Filter to only users with parentalEnabled=true
-    var docs = (Array.isArray(allDocs)?allDocs:[allDocs]).filter(function(d){
-      return d.document && d.document.fields && d.document.fields.parentalEnabled && d.document.fields.parentalEnabled.booleanValue===true;
-    });
-    var users = (Array.isArray(docs)?docs:[docs]).filter(function(d){return d.document;}).map(function(d){
-      var f=d.document.fields||{};
-      var uid=d.document.name.split('/').pop();
-      var g=function(k){var v=f[k];return v?(v.stringValue||v.booleanValue||v.integerValue||''):null;};
-      var blocked={};
-      try{blocked=JSON.parse(f.parentalBlocked&&f.parentalBlocked.stringValue||'{}');}catch(e){}
-      return {uid:uid,name:g('displayName')||'?',email:g('email')||'',blocked:blocked};
+    // Use getAnalytics which is already authenticated via Firebase SDK
+    var analytics = await window._fb.getAnalytics();
+    var allUsers = analytics && analytics.users ? analytics.users : [];
+    // Filter to users who have parentalEnabled set
+    var users = allUsers.filter(function(u){ return u.parentalEnabled === true; }).map(function(u){
+      var blocked = {};
+      try{ blocked = JSON.parse(u.parentalBlocked||'{}'); }catch(e){}
+      return {uid:u.uid||u.id||'', name:u.displayName||u.email||'?', email:u.email||'', blocked:blocked};
     });
     
     if(!users.length){
@@ -17528,20 +17528,13 @@ async function chatDeleteForMe(convId){
   try{
     var uid = window._fb&&window._fb.user ? window._fb.user.uid : null;
     if(!uid) return;
-    // Store "hidden for user" list in their own user doc
-    var hiddenKey = 'hiddenChats';
-    var tok = await window._fb.user.getIdToken();
-    // Get current hidden list
-    var r = await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q');
-    var d = await r.json();
+    // Store hidden list in localStorage (instant, no auth needed)
+    var storageKey = 'c64_hidden_chats_' + uid;
     var hiddenList = [];
-    try{ hiddenList = JSON.parse((d.fields&&d.fields.hiddenChats&&d.fields.hiddenChats.stringValue)||'[]'); }catch(e){}
+    try{ hiddenList = JSON.parse(localStorage.getItem(storageKey)||'[]'); }catch(e){}
     if(!hiddenList.includes(convId)) hiddenList.push(convId);
-    // Save updated list
-    await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=hiddenChats',{
-      method:'PATCH', headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
-      body: JSON.stringify({fields:{hiddenChats:{stringValue:JSON.stringify(hiddenList)}}})
-    });
+    localStorage.setItem(storageKey, JSON.stringify(hiddenList));
+    window._hiddenChats = hiddenList;
     // Clear the UI
     _chatCurrentId = null;
     var inp = document.getElementById('msg-input-bar');
@@ -17564,14 +17557,12 @@ async function chatDeleteForMe(convId){
 (function(){
   var _orig = window.chatLoadConvList;
   window.chatLoadConvList = async function(){
-    // First get hidden list for this user
+    // Get hidden list from localStorage
     var hiddenList = [];
     try{
       var uid = window._fb&&window._fb.user ? window._fb.user.uid : null;
       if(uid){
-        var r = await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q');
-        var d = await r.json();
-        hiddenList = JSON.parse((d.fields&&d.fields.hiddenChats&&d.fields.hiddenChats.stringValue)||'[]');
+        hiddenList = JSON.parse(localStorage.getItem('c64_hidden_chats_'+uid)||'[]');
       }
     }catch(e){}
     window._hiddenChats = hiddenList;
@@ -17619,6 +17610,109 @@ async function chatDeleteForMe(convId){
     }
   };
 })();
+</script>
+
+
+<script>
+/* ════════════════════════════════════════════════════════════════
+   CHESS64 — Admin Chats viewer + remaining fixes
+   ════════════════════════════════════════════════════════════════ */
+
+// ── Admin: inject Chats tab ───────────────────────────────────────
+(function(){
+  function injectChatsTab(){
+    if(document.getElementById('adm-tab-chats')) return;
+    var reportsTab = document.getElementById('adm-tab-reports');
+    if(!reportsTab) return;
+
+    // Add tab button
+    var tab = document.createElement('button');
+    tab.className = 'fb-tab';
+    tab.id = 'adm-tab-chats';
+    tab.textContent = '💬 Chats';
+    tab.style.cssText = 'flex:none;padding:5px 10px;font-size:11px';
+    tab.onclick = admShowChatsPane;
+    reportsTab.parentNode.insertBefore(tab, reportsTab.nextSibling);
+
+    // Add pane
+    var reportsPane = document.getElementById('adm-pane-reports');
+    if(!reportsPane) return;
+    var pane = document.createElement('div');
+    pane.id = 'adm-pane-chats';
+    pane.style.display = 'none';
+    pane.innerHTML = '<button class="btn btn-primary btn-sm" onclick="admLoadAllChats()" style="margin-bottom:8px">🔄 Load All Conversations</button>'
+      + '<div id="adm-chats-list" style="font-size:12px;max-height:360px;overflow-y:auto"><p style="color:var(--text2)">Click Load to see all conversations.</p></div>';
+    reportsPane.parentNode.insertBefore(pane, reportsPane);
+  }
+  setTimeout(injectChatsTab, 1500);
+  var _o = window._onFbAuthChange;
+  window._onFbAuthChange = function(user, isAdmin){
+    if(_o) _o(user, isAdmin);
+    if(isAdmin) setTimeout(injectChatsTab, 800);
+  };
+})();
+
+function admShowChatsPane(){
+  ['analytics','users','articles','broadcast','requests','reports','usernames','parental','chats'].forEach(function(t){
+    var b = document.getElementById('adm-tab-'+t);
+    var p = document.getElementById('adm-pane-'+t);
+    if(b) b.classList.toggle('active', t==='chats');
+    if(p) p.style.display = (t==='chats') ? 'block' : 'none';
+  });
+  admLoadAllChats();
+}
+
+async function admLoadAllChats(){
+  var el = document.getElementById('adm-chats-list');
+  if(!el) return;
+  el.innerHTML = '<div style="color:var(--text2)">Loading...</div>';
+  try{
+    var convs = await window._fb.getAllConversationsAdmin();
+    if(!convs || !convs.length){
+      el.innerHTML = '<p style="color:var(--text2)">No conversations found.</p>';
+      return;
+    }
+    var esc = function(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
+    var html = '';
+    convs.forEach(function(cv){
+      var members = esc((cv.memberNames||cv.members||[]).join(', ')).slice(0,80);
+      var lastMsg = esc(cv.lastMsg ? cv.lastMsg.slice(0,60) : '—');
+      var cvName = esc(cv.name||cv.type||'Chat');
+      var cvId = (cv.id||'').replace(/'/g,'');
+      html += '<div style="padding:9px;border-bottom:1px solid var(--border)">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:flex-start">';
+      html += '<div style="font-weight:600;font-size:12px">'+cvName+'</div>';
+      html += '<span style="font-size:10px;color:var(--text2)">'+(cv.type||'dm')+'</span>';
+      html += '</div>';
+      html += '<div style="font-size:11px;color:var(--text2);margin-bottom:4px">Members: '+members+'</div>';
+      html += '<div style="font-size:11px;margin-bottom:5px">Last: <em>'+lastMsg+'</em></div>';
+      html += '<button class="btn btn-ghost btn-sm" style="font-size:10px" data-id="' + cvId + '" onclick="admViewChatMessages(this.dataset.id)">&#128214; View Messages</button>';
+      html += '</div>';
+    });
+    el.innerHTML = html;
+  }catch(e){ el.innerHTML = '<p style="color:var(--red)">'+e.message+'</p>'; }
+}
+
+async function admViewChatMessages(chatId){
+  var modal = document.getElementById('adm-detail-modal');
+  var title = document.getElementById('adm-detail-title');
+  var body = document.getElementById('adm-detail-body');
+  if(!modal||!title||!body) return;
+  title.textContent = '💬 Chat Messages';
+  body.innerHTML = '<div class="spinner" style="margin:20px auto;display:block"></div>';
+  modal.style.display = 'flex';
+  try{
+    var msgs = await window._fb.getChatMessages(chatId);
+    if(!msgs.length){ body.innerHTML = '<p style="color:var(--text2)">No messages.</p>'; return; }
+    body.innerHTML = msgs.map(function(m){
+      var ts = m.createdAt&&m.createdAt.toDate ? m.createdAt.toDate().toLocaleString() : '';
+      return '<div style="padding:7px;border-bottom:1px solid var(--border)">'
+        + '<div style="font-size:10px;color:var(--text2);margin-bottom:2px">'+(m.name||'?').replace(/</g,'&lt;')+' · '+ts+'</div>'
+        + '<div style="font-size:12px">'+(m.text||'').replace(/</g,'&lt;')+'</div>'
+        + '</div>';
+    }).join('');
+  }catch(e){ body.innerHTML = '<p style="color:var(--red)">'+e.message+'</p>'; }
+}
 </script>
 
 </body></html>
