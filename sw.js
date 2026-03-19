@@ -1,50 +1,37 @@
-// Chess64 Service Worker — enables offline use and PWA install
-const CACHE = 'chess64-v1';
-const ASSETS = [
-  '/Chess64.app/',
-  '/Chess64.app/index.html',
-];
+// Chess64 Service Worker — v2 (network-first, busts stale cache)
+const CACHE = 'chess64-v2';
 
 self.addEventListener('install', function(e){
-  e.waitUntil(
-    caches.open(CACHE).then(function(cache){
-      return cache.addAll(ASSETS).catch(function(){ /* offline, skip */ });
-    })
-  );
   self.skipWaiting();
 });
 
 self.addEventListener('activate', function(e){
   e.waitUntil(
     caches.keys().then(function(keys){
-      return Promise.all(keys.filter(function(k){ return k!==CACHE; }).map(function(k){ return caches.delete(k); }));
-    })
+      return Promise.all(keys.map(function(k){ return caches.delete(k); }));
+    }).then(function(){ return self.clients.claim(); })
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', function(e){
-  // Network-first for API calls
-  if(e.request.url.includes('firestore.googleapis.com') ||
-     e.request.url.includes('identitytoolkit') ||
-     e.request.url.includes('firebaseapp')) {
-    return; // Don't intercept Firebase calls
-  }
-  // Cache-first for app shell
+  var url = e.request.url;
+  if(e.request.method !== 'GET') return;
+  if(url.includes('firestore.googleapis.com')) return;
+  if(url.includes('identitytoolkit.googleapis.com')) return;
+  if(url.includes('firebase')) return;
+  if(url.includes('lichess.org')) return;
+  if(url.includes('2700chess.com')) return;
+
+  // NETWORK-FIRST: always fetch fresh, only fall back to cache if offline
   e.respondWith(
-    caches.match(e.request).then(function(cached){
-      if(cached) return cached;
-      return fetch(e.request).then(function(response){
-        if(response.ok && e.request.method==='GET'){
-          var clone = response.clone();
-          caches.open(CACHE).then(function(cache){ cache.put(e.request, clone); });
-        }
-        return response;
-      }).catch(function(){
-        if(e.request.destination==='document'){
-          return caches.match('/Chess64.app/');
-        }
-      });
+    fetch(e.request).then(function(response){
+      if(response.ok){
+        var clone = response.clone();
+        caches.open(CACHE).then(function(cache){ cache.put(e.request, clone); });
+      }
+      return response;
+    }).catch(function(){
+      return caches.match(e.request);
     })
   );
 });
