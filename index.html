@@ -12,7 +12,7 @@
 <meta name="theme-color" content="#0d0f14">
 <title>Chess64 — Play Chess Online Free | Puzzles, Analysis, Openings & More</title>
 <!-- Primary SEO -->
-<meta name="description" content="Chess64 — The best free chess platform online. Play chess against AI bots with unique personalities, solve Lichess puzzles, explore openings with live database, analyze games with Stockfish engine, train repertoires, and learn chess theory. 100% free, no account needed.">
+<meta name="description" content="Chess64 — Free online chess with real multiplayer, community forums, live chat, AI bots with trash talk, custom bots, Stockfish engine, puzzles, articles, opening explorer and more. No download needed.">
 <meta name="keywords" content="chess64, chess online free, play chess online, free chess game, chess AI opponent, chess puzzles, lichess puzzles, chess openings explorer, chess analysis stockfish, chess engine analysis, chess tactics trainer, chess repertoire, chess960 fischer random, chess for beginners, chess learning platform, chess bots, chess opening theory, chess endgame, chess middlegame, free chess website, chess64.app, best chess site, chess without login">
 <meta name="author" content="Chess64">
 <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
@@ -25,8 +25,8 @@
 <meta name="category" content="games, chess, education">
 <!-- Open Graph -->
 <meta property="og:type" content="website">
-<meta property="og:title" content="Chess64 — Free Chess Platform | Play, Puzzles, Analysis">
-<meta property="og:description" content="The most beautiful free chess platform. Play against AI bots, solve real Lichess puzzles, explore openings with live database, analyze with Stockfish. No account needed!">
+<meta property="og:title" content="Chess64 — Online Chess | Multiplayer, Community, Bots, Forums">
+<meta property="og:description" content="Free online chess with multiplayer, community forums, live chat, AI bots with trash talk, custom bots, Stockfish engine, puzzles, articles and more.">
 <meta property="og:url" content="https://pytheorem07.github.io/Chess64.app/">
 <meta property="og:site_name" content="Chess64">
 <meta property="og:image" content="https://pytheorem07.github.io/Chess64.app/og-image.png">
@@ -36,8 +36,8 @@
 <meta property="og:locale" content="en_US">
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Chess64 — Free Chess Platform">
-<meta name="twitter:description" content="Play chess free online. AI bots with personalities, Lichess puzzles, Stockfish analysis, opening explorer. No sign-up!">
+<meta name="twitter:title" content="Chess64 — Online Chess | Multiplayer, Community, Bots">
+<meta name="twitter:description" content="Free chess with real multiplayer, community, forums, chat, AI bots with trash talk, custom bots, Stockfish, puzzles, articles and more.">
 <meta name="twitter:image" content="https://pytheorem07.github.io/Chess64.app/og-image.png">
 <meta name="twitter:site" content="@chess64app">
 <!-- Structured Data -->
@@ -1870,9 +1870,6 @@ if(_fbReady && _auth){
         <button class="btn btn-ghost btn-sm" onclick="exportPGN()">&#128203; PGN</button>
         <button class="btn btn-ghost btn-sm" id="bot-thoughts-btn" onclick="toggleBotThoughts()">🧠 Bot Thoughts</button>
       </div>
-      <div style="font-size:11px;color:var(--text2);text-align:center;padding:3px 6px;font-style:italic;">
-        ⏱️ Clock is mainly for your time management — bot response time may vary and is not always accurate.
-      </div>
     </div>
     <div class="play-right">
       <div class="tabs" id="play-tabs">
@@ -2290,13 +2287,24 @@ if(_fbReady && _auth){
       </div>
     <h1>&#128081; Notable Players</h1>
     <div style="margin:10px 0 16px;text-align:center">
+      <!-- 2700chess.com live ratings banner -->
       <a href="https://2700chess.com" target="_blank">
-        <img src="https://2700chess.com/files/top10_olive.png" alt="Live Top 10 Chess Ratings"
-          title="Click for full live ratings at 2700chess.com"
-          style="max-width:100%;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,.3)"
-          onerror="this.parentElement.style.display='none'">
+        <img id="banner2700-img" border="0" src="https://2700chess.com/files/top10_olive.png"
+          alt="2700chess.com for more details and full list"
+          title="2700chess.com for more details and full list"
+          style="max-width:100%"
+          onerror="this.style.display='none';document.getElementById('banner2700-down').style.display='block';loadBanner2700Fallback()"/>
       </a>
-      <div style="font-size:11px;color:var(--text2);margin-top:3px">📡 Live ratings banner via <a href="https://2700chess.com" target="_blank" style="color:var(--accent)">2700chess.com</a></div>
+      <div id="banner2700-down" style="display:none">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:6px;padding:4px 2px">
+          &#128225; The <b>2700chess.com</b> banner appears to be unavailable right now &mdash;
+          <a href="https://2700chess.com" target="_blank" style="color:var(--accent)">visit 2700chess.com</a> for live ratings.
+          Showing Chess.com live blitz top 10:
+        </div>
+        <div id="banner2700-cc" style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:6px 0">
+          <div style="text-align:center;padding:10px;color:var(--text2);font-size:12px">Loading&#8230;</div>
+        </div>
+      </div>
     </div>
     <div class="tabs" id="pl-tabs">
       <button class="tab active" onclick="plTab('notable')">Notable Players</button>
@@ -2308,13 +2316,52 @@ if(_fbReady && _auth){
     <div class="tab-content" id="pl-tab-search">
       <div class="card"><h3>Search Chess.com Player</h3><div style="display:flex;gap:7px;margin-top:9px"><input type="text" id="pl-search-input" placeholder="Username..." style="flex:1" onkeydown="if(event.key==='Enter')searchPlayer()"><button class="btn btn-primary" onclick="searchPlayer()">Search</button></div><div id="pl-search-result" style="margin-top:14px"></div></div>
     </div>
-    <div class="tab-content" id="pl-tab-leaderboard">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
-        <select id="pl-lb-type" onchange="loadLeaderboard()" style="width:180px"><option value="live_rapid">Rapid</option><option value="live_blitz">Blitz</option><option value="live_bullet">Bullet</option><option value="tactics">Tactics</option></select>
-        <button class="btn btn-ghost btn-sm" onclick="loadLeaderboard()">&#128260; Refresh</button>
+        <div class="tab-content" id="pl-tab-leaderboard">
+      <!-- Sub-tabs: Chess.com vs Lichess -->
+      <div style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:8px">
+        <button id="lb-src-chesscom" class="btn btn-primary btn-sm" onclick="lbSwitchSource('chesscom')" style="font-size:11px">&#9812; Chess.com</button>
+        <button id="lb-src-lichess" class="btn btn-ghost btn-sm" onclick="lbSwitchSource('lichess')" style="font-size:11px">&#127821; Lichess</button>
       </div>
-      <div id="pl-leaderboard-list"></div>
-      <div id="pl-player-modal" style="display:none;margin-top:14px"></div>
+
+      <!-- Chess.com leaderboard -->
+      <div id="lb-pane-chesscom">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+          <select id="pl-lb-type" onchange="loadLeaderboard()" style="width:180px">
+            <option value="live_rapid">Rapid</option>
+            <option value="live_blitz">Blitz</option>
+            <option value="live_bullet">Bullet</option>
+            <option value="daily">Daily</option>
+            <option value="live_chess960">Chess960</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="loadLeaderboard()">&#128260; Refresh</button>
+        </div>
+        <div id="pl-leaderboard-list"></div>
+      </div>
+
+      <!-- Lichess leaderboard -->
+      <div id="lb-pane-lichess" style="display:none">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+          <select id="li-lb-type" onchange="loadLichessLeaderboard()" style="width:180px">
+            <option value="classical">Classical</option>
+            <option value="rapid">Rapid</option>
+            <option value="blitz">Blitz</option>
+            <option value="bullet">Bullet</option>
+            <option value="ultraBullet">UltraBullet</option>
+            <option value="chess960">Chess960</option>
+            <option value="crazyhouse">Crazyhouse</option>
+            <option value="antichess">Antichess</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="loadLichessLeaderboard()">&#128260; Refresh</button>
+        </div>
+        <!-- Lichess user search -->
+        <div style="display:flex;gap:6px;margin-bottom:10px">
+          <input id="li-search-inp" type="text" placeholder="Search Lichess username&#8230;" style="flex:1;padding:7px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:13px" onkeydown="if(event.key==='Enter')searchLichessUser()">
+          <button class="btn btn-primary btn-sm" onclick="searchLichessUser()">&#128269; Search</button>
+        </div>
+        <div id="li-leaderboard-list"></div>
+      </div>
+
+      <div id="pl-player-modal"<div id="pl-player-modal" style="display:none;margin-top:14px"></div>
     </div>
   </div>
 </div>
@@ -3158,10 +3205,13 @@ function selectBot(bot){
   curBot=bot;
   document.getElementById('resign-btn').style.display='inline-flex';
   document.getElementById('draw-btn').style.display='inline-flex';
-  document.getElementById('bot-name-disp').textContent=bot.emoji+' '+bot.name;
+  // Use innerHTML so HTML entities like &#129302; render correctly
+  var safeEmoji=bot.emoji&&bot.emoji.startsWith('&#')?bot.emoji:(bot.emoji||'&#129302;');
+  var safeName=(bot.name||'').replace(/</g,'&lt;');
+  document.getElementById('bot-name-disp').innerHTML=safeEmoji+' '+safeName;
   document.getElementById('bot-rating-disp').textContent='Rating: '+bot.rating;
-  document.getElementById('bot-avatar').textContent=bot.emoji;
-  document.getElementById('chat-bot-name').textContent=bot.emoji+' '+bot.name;
+  document.getElementById('bot-avatar').innerHTML=safeEmoji;
+  document.getElementById('chat-bot-name').innerHTML=safeEmoji+' '+safeName;
   botSay('start');renderBotGrid();
 }
 
@@ -3480,20 +3530,24 @@ function schedAI(){
   _schedAiFallback(delay);
 }
 function _schedAiFallback(delay){
-  const dep=Math.min((curBot&&curBot.depth)||2,3);
-  setTimeout(()=>{
-    if(gameOver||GS.turn===playerColor)return;
-    try{
-      // Style-biased move selection
-      let mv=null;
-      try{ mv=bestMoveFn(GS,dep); }catch(e){}
-      if(!mv){
-        const legal=allLegal(GS);
-        if(legal.length) mv=legal[Math.floor(Math.random()*Math.min(legal.length,4))];
-      }
-      if(mv) execBotMove(mv);
-    }catch(e){ console.warn('bot fallback error',e); }
-  },delay||500);
+  // Use the bot's actual depth (capped at 5 to stay responsive)
+  const dep=Math.min((curBot&&curBot.depth)||2,5);
+  const _snapGs=GS;
+  // requestAnimationFrame ensures UI renders before we compute
+  requestAnimationFrame(function(){
+    setTimeout(function(){
+      if(gameOver||_snapGs.turn===playerColor)return;
+      try{
+        let mv=null;
+        try{ mv=bestMoveFn(_snapGs,dep); }catch(e){}
+        if(!mv){
+          const legal=allLegal(_snapGs);
+          if(legal.length) mv=legal[Math.floor(Math.random()*Math.min(legal.length,3))];
+        }
+        if(mv&&!gameOver) setTimeout(function(){ try{execBotMove(mv);}catch(e){} }, Math.max(100,delay||400));
+      }catch(e){ console.warn('bot fallback error',e); }
+    },0);
+  });
 }
 
 function _botPlayThoughts(info){
@@ -4183,16 +4237,7 @@ function selectOpening(idx){
   const op=OPENINGS[idx];if(!op)return;
   opTab('theory');
   document.getElementById('op-theory-content').innerHTML=`<h2>${op.eco} \u2014 ${op.name}</h2>
-    <!-- 2700chess.com live ratings banner -->
-    <div style="margin:10px 0 16px;text-align:center">
-      <a href="https://2700chess.com" target="_blank" style="display:inline-block">
-        <img src="https://2700chess.com/files/top10_olive.png" alt="Top 10 live ratings - 2700chess.com"
-          title="Live top 10 ratings - 2700chess.com"
-          style="max-width:100%;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,.3)"
-          onerror="this.parentElement.style.display='none'">
-      </a>
-      <div style="font-size:10px;color:var(--text2);margin-top:3px">Live ratings via 2700chess.com</div>
-    </div><div style="margin:10px 0;font-size:13px;color:var(--text2)">Moves: <strong style="font-family:monospace">${op.moves}</strong></div><div class="card" style="margin-bottom:14px"><h3>📖 Theory</h3><p style="margin-top:7px;line-height:1.7;font-size:13px">${op.theory||'Theory coming soon.'}</p></div><div class="card"><h3>🎯 Key Ideas</h3><ul style="margin-left:18px;margin-top:7px;font-size:13px;line-height:1.9">${(op.ideas||[op.desc||'Study this opening deeply']).map(i=>`<li>${i}</li>`).join('')}</ul></div><button class="btn btn-primary" style="margin-top:12px" onclick="playOpeningOnBoard(${idx})">▶ Play on Board</button>`;
+<div style="margin:10px 0;font-size:13px;color:var(--text2)">Moves: <strong style="font-family:monospace">${op.moves}</strong></div><div class="card" style="margin-bottom:14px"><h3>📖 Theory</h3><p style="margin-top:7px;line-height:1.7;font-size:13px">${op.theory||'Theory coming soon.'}</p></div><div class="card"><h3>🎯 Key Ideas</h3><ul style="margin-left:18px;margin-top:7px;font-size:13px;line-height:1.9">${(op.ideas||[op.desc||'Study this opening deeply']).map(i=>`<li>${i}</li>`).join('')}</ul></div><button class="btn btn-primary" style="margin-top:12px" onclick="playOpeningOnBoard(${idx})">▶ Play on Board</button>`;
 }
 function playOpeningOnBoard(idx){
   const op=OPENINGS[idx];
@@ -4958,12 +5003,13 @@ function renderOpBoard() {
 function handleOpClick(r, c) {
   const legal = allLegal(opGs);
   const piece = opGs.board[r][c];
-  const myColor = opGs.turn; // 'w' or 'b'
+  // Use isW/isB (pieces are integers 1-12, not strings)
+  const myPiece = piece && (opGs.turn==='w' ? isW(piece) : isB(piece));
 
   // If a piece is already selected
   if (opSel) {
     const [sr, sc] = opSel;
-    // Try to make the move from selected to clicked square
+    // Try to move from selected square to clicked square
     const movesFromSel = legal.filter(m=>m.fr===sr&&m.fc===sc&&m.tr===r&&m.tc===c);
     if (movesFromSel.length) {
       opSel = null; opLegalSqs = [];
@@ -4972,20 +5018,23 @@ function handleOpClick(r, c) {
       renderOpBoard(); fetchOpExpl(); renderOpeningList();
       return;
     }
-    // Clicked same piece: deselect
+    // Clicked same square: deselect
     if (sr===r && sc===c) { opSel=null; opLegalSqs=[]; renderOpBoard(); return; }
-    // Clicked another own piece: select it instead
-    if (piece && piece[0]===myColor) {
-      opSel = [r,c];
-      opLegalSqs = legal.filter(m=>m.fr===r&&m.fc===c).map(m=>({r:m.tr,c:m.tc}));
-      renderOpBoard(); return;
+    // Clicked another own piece: switch selection
+    if (myPiece) {
+      const movesFromNew = legal.filter(m=>m.fr===r&&m.fc===c);
+      if (movesFromNew.length) {
+        opSel = [r,c];
+        opLegalSqs = movesFromNew.map(m=>({r:m.tr,c:m.tc}));
+        renderOpBoard(); return;
+      }
     }
-    // Clicked empty or enemy with no legal move from selection: deselect
+    // Clicked elsewhere: deselect and fall through
     opSel=null; opLegalSqs=[];
   }
 
-  // No selection yet: select this piece if it belongs to current player
-  if (piece && piece[0]===myColor) {
+  // No selection: select own piece
+  if (myPiece) {
     const movesFromHere = legal.filter(m=>m.fr===r&&m.fc===c);
     if (movesFromHere.length) {
       opSel = [r,c];
@@ -4994,10 +5043,11 @@ function handleOpClick(r, c) {
     }
   }
 
-  // Clicked a destination with no selection: find if any piece can move here
+  // No selection, clicked destination: move if unambiguous
   const byDest = legal.filter(m=>m.tr===r&&m.tc===c);
-  if (byDest.length===1) {
+  if (byDest.length === 1) {
     opHist.push(byDest[0]); opGs=applyMove(opGs,byDest[0]);
+    opSel=null; opLegalSqs=[];
     renderOpBoard(); fetchOpExpl(); renderOpeningList();
   }
 }
@@ -10715,8 +10765,8 @@ function printBoard(){
           <div id="adm-titles-list" style="max-height:320px;overflow-y:auto;font-size:12px"><p style="color:var(--text2)">Click Load to see pending requests.</p></div>
         </div>
         <div id="adm-pane-custbots" style="display:none">
-          <button class="btn btn-primary btn-sm" onclick="admLoadBotRequests()" style="margin-bottom:8px">&#128260; Load Bot Requests</button>
-          <div id="adm-custbots-list" style="max-height:320px;overflow-y:auto;font-size:12px"><p style="color:var(--text2)">Click Load to see submitted bots.</p></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"><button class="btn btn-primary btn-sm" onclick="admLoadBotRequests()">&#128260; Pending Requests</button><button class="btn btn-ghost btn-sm" onclick="admLoadApprovedBots()">&#128295; Manage Approved</button></div>
+          <div id="adm-custbots-list" style="max-height:420px;overflow-y:auto;font-size:12px"><p style="color:var(--text2)">Click above to manage bots.</p></div>
         </div>
         <div id="adm-pane-reports" style="display:none">
           <button class="btn btn-primary btn-sm" onclick="admLoadReports()" style="margin-bottom:8px">🔄 Load Reports</button>
@@ -11980,10 +12030,11 @@ function artPreview(){
       <p style="color:var(--text2);margin-bottom:14px;font-size:13px">Chess64 is made possible by these incredible open-source projects and APIs:</p>
       <div style="display:grid;gap:10px">
         <div style="display:flex;align-items:flex-start;gap:12px;padding:10px;background:var(--bg3);border-radius:8px"><div style="font-size:28px;flex-shrink:0">&#9889;</div><div><div style="font-weight:700"><a href="https://stockfishchess.org" target="_blank">Stockfish</a></div><div style="font-size:12px;color:var(--text2)">The world's strongest open-source chess engine, used for analysis, AI opponents, and position evaluation.</div></div></div>
-        <div style="display:flex;align-items:flex-start;gap:12px;padding:10px;background:var(--bg3);border-radius:8px"><div style="font-size:28px;flex-shrink:0">&#128075;</div><div><div style="font-weight:700"><a href="https://lichess.org" target="_blank">Lichess</a></div><div style="font-size:12px;color:var(--text2)">Free and open-source chess platform. Chess64 uses Lichess's public broadcast API to display upcoming and live chess events on the Events page. Lichess is truly amazing.</div></div></div>
+        <div style="display:flex;align-items:flex-start;gap:12px;padding:10px;background:var(--bg3);border-radius:8px"><div style="font-size:28px;flex-shrink:0">&#128075;</div><div><div style="font-weight:700"><a href="https://lichess.org" target="_blank">Lichess</a></div><div style="font-size:12px;color:var(--text2)">Free and open-source chess for everyone. Chess64 uses Lichess's public broadcast API to display upcoming and live chess events on the Events page. Lichess is a non-profit and we love them for it.</div></div></div>
         <div style="display:flex;align-items:flex-start;gap:12px;padding:10px;background:var(--bg3);border-radius:8px"><div style="font-size:28px;flex-shrink:0">&#9812;</div><div><div style="font-weight:700"><a href="https://chess.com" target="_blank">Chess.com</a></div><div style="font-size:12px;color:var(--text2)">Player profiles, ratings, leaderboards, and game archives provided through the Chess.com public API.</div></div></div>
         <div style="display:flex;align-items:flex-start;gap:12px;padding:10px;background:var(--bg3);border-radius:8px"><div style="font-size:28px;flex-shrink:0">&#128247;</div><div><div style="font-weight:700"><a href="https://commons.wikimedia.org/wiki/Category:SVG_chess_pieces" target="_blank">Wikimedia Commons / CBurnett</a></div><div style="font-size:12px;color:var(--text2)">The beautiful chess piece images are the CBurnett piece set, released under Creative Commons license by Colin M.L. Burnett.</div></div></div>
-        
+        <div style="display:flex;align-items:flex-start;gap:12px;padding:10px;background:var(--bg3);border-radius:8px"><div style="font-size:28px;flex-shrink:0">&#127760;</div><div><div style="font-weight:700"><a href="https://2700chess.com" target="_blank" style="color:var(--accent);text-decoration:none">2700chess.com</a></div><div style="font-size:12px;color:var(--text2)">Live top-player ratings banner displayed on the Notable Players page. A great resource for following elite chess.</div></div></div>
+        <div style="display:flex;align-items:flex-start;gap:12px;padding:10px;background:var(--bg3);border-radius:8px"><div style="font-size:28px;flex-shrink:0">&#128293;</div><div><div style="font-weight:700"><a href="https://firebase.google.com" target="_blank" style="color:var(--accent);text-decoration:none">Firebase / Google</a></div><div style="font-size:12px;color:var(--text2)">Authentication, real-time database, and infrastructure powering all user accounts, online games, chat, community features, and cloud sync.</div></div></div>
       </div>
     </div>
     <div class="card section" style="text-align:center">
@@ -11995,6 +12046,7 @@ function artPreview(){
       </div>
     </div>
   </div>
+
 </div>
 
 
@@ -13251,60 +13303,14 @@ setTimeout(()=>{
     });
   }
 
+  // Wrap real schedAI to show thinking indicator — preserves Stockfish + minimax
+  const _realSchedAI = window.schedAI;
   window.schedAI = function(){
     if(typeof curBot==='undefined'||!curBot) return;
     if(typeof gameOver!=='undefined'&&gameOver) return;
-    if(typeof GS==='undefined') return;
-    if(GS.turn===playerColor) return;
-
-    const delay=(curBot.delay||400)+Math.random()*300;
-    _showBotThoughts(`<span style="color:var(--accent)">🤔 Thinking…</span>`);
-
-    // Opening book first (first 20 moves)
-    if(typeof moveHist!=='undefined'&&moveHist.length<20){
-      try{
-        const bm=typeof getBotBook==='function'?getBotBook(curBot):null;
-        if(bm){
-          _showBotThoughts(`<span style="color:var(--accent)">📖 Book</span>`);
-          setTimeout(()=>{
-            if(typeof gameOver==='undefined'||!gameOver) try{execBotMove(bm);}catch(e){}
-          }, delay);
-          return;
-        }
-      }catch(e){}
-    }
-
-    // NON-BLOCKING: fast material+positional scorer, no synchronous minimax
-    const _legalNow = (typeof allLegal==='function') ? allLegal(GS) : [];
-    if(!_legalNow.length){ _showBotThoughts('<span style="color:var(--text2)">—</span>'); return; }
-
-    const _pv = {p:100,n:320,b:330,r:500,q:900,k:0};
-    const _scores = _legalNow.map(function(mv){
-      try{
-        const cap=GS.board[mv.tr][mv.tc];
-        let sc = cap ? (_pv[cap[1]]||0) : 0;             // capture value
-        sc += mv.promo==='q' ? 800 : 0;                  // promotion bonus
-        const dr=Math.abs(mv.tr-3.5), dc=Math.abs(mv.tc-3.5);
-        sc += (7-(dr+dc))*2;                             // center bonus
-        sc += (Math.random()-0.5)*(curBot.rand||0.5)*60; // bot personality
-        return sc;
-      }catch(e){ return Math.random()*10; }
-    });
-    let _bestIdx=0;
-    for(let _i=1;_i<_scores.length;_i++){ if(_scores[_i]>_scores[_bestIdx]) _bestIdx=_i; }
-    const _chosenMv=_legalNow[_bestIdx];
-    // Store for force-move
-    if(typeof _botForcedMove!=='undefined') _botForcedMove=_chosenMv;
-    _showBotThoughts('<span style="color:var(--accent)">&#129302; Thinking…</span>');
-    // Delay execution — UI is 100% free during this delay
-    setTimeout(function(){
-      if(typeof gameOver!=='undefined'&&gameOver) return;
-      if(GS.turn===playerColor) return;
-      if(typeof _botForcedMove!=='undefined') _botForcedMove=_chosenMv;
-      const uci='abcdefgh'[_chosenMv.fc]+(8-_chosenMv.fr)+'abcdefgh'[_chosenMv.tc]+(8-_chosenMv.tr)+(_chosenMv.promo||'');
-      _showBotThoughts('<span style="color:var(--accent);font-weight:700">&#9654;</span> <span style="color:var(--text2);font-size:10px">'+uci+'</span>');
-      try{ execBotMove(_chosenMv); }catch(e){}
-    }, Math.max(200, delay));
+    if(typeof GS==='undefined'||GS.turn===playerColor) return;
+    _showBotThoughts('<span style="color:var(--accent)">&#129302; Thinking&#8230;</span>');
+    if(typeof _realSchedAI==='function') _realSchedAI();
   };
 })();
 
@@ -18596,24 +18602,48 @@ window.addEventListener('DOMContentLoaded', function(){
     if(!saved) return;
     var age = Math.round((Date.now()-saved.savedAt)/60000);
     if(confirm('Resume your bot game from '+age+' minute(s) ago?')){
-      // Find the bot
       var bot = (window.BOTS||[]).find(function(b){ return b.id===saved.botId||b.name===saved.botId; });
+      if(!bot && window._communityBots){
+        bot=(window._communityBots||[]).find(function(b){return b.id===saved.botId||b.name===saved.botId;});
+      }
       if(bot && saved.fen){
-        curBot = bot;
-        playerColor = saved.playerColor||'w';
-        // Rebuild game state from FEN
         try{
+          // Restore full game state
+          curBot = bot;
+          playerColor = saved.playerColor||'w';
           GS = parseFen(saved.fen);
-          if(saved.moveHist) moveHist = saved.moveHist;
+          if(saved.moveHist) moveHist=saved.moveHist;
+          if(saved.sanHist) sanHist=saved.sanHist;
           gameOver = false;
-          renderBoard('play-board', GS, {flip:playerColor==='b'});
-          if(typeof updateEval==='function') updateEval();
-          // Show pause button
-          var pb = document.getElementById('bot-pause-btn');
-          if(pb) pb.style.display='inline';
-          showToast('\u25B6 Game resumed!');
+          flipped = (playerColor==='b');
+          // Navigate to play page first, then render
           navTo('play');
-        }catch(e){}
+          setTimeout(function(){
+            try{
+              // Update bot display
+              var safeEmoji=bot.emoji&&bot.emoji.startsWith('&#')?bot.emoji:(bot.emoji||'&#129302;');
+              var el_name=document.getElementById('bot-name-disp');
+              var el_rate=document.getElementById('bot-rating-disp');
+              var el_avat=document.getElementById('bot-avatar');
+              var el_cbn=document.getElementById('chat-bot-name');
+              if(el_name) el_name.innerHTML=safeEmoji+' '+(bot.name||'').replace(/</g,'&lt;');
+              if(el_rate) el_rate.textContent='Rating: '+bot.rating;
+              if(el_avat) el_avat.innerHTML=safeEmoji;
+              if(el_cbn)  el_cbn.innerHTML=safeEmoji+' '+(bot.name||'').replace(/</g,'&lt;');
+              // Render board
+              renderPlayBoard();
+              updatePlayHist();
+              // Show pause button
+              var pb=document.getElementById('bot-pause-btn');
+              if(pb) pb.style.display='inline';
+              showToast('&#9654; Game resumed!');
+            }catch(e){ console.warn('resume render error',e); }
+          }, 200);
+        }catch(e){ console.warn('resume state error',e); clearBotGameState(); }
+      } else {
+        showToast('Could not find saved bot — starting fresh.');
+        clearBotGameState();
+        navTo('play');
       }
     } else {
       clearBotGameState();
@@ -18935,6 +18965,214 @@ async function fbLoadMyRecentGames(){
 
 </script>
 
+
+
+
+<script>
+/* ════════════════════════════════════════════════════════════════
+   Chess64 — Lichess Leaderboard + User Search + Analyze
+   ════════════════════════════════════════════════════════════════ */
+
+var _lbSource = 'chesscom';
+
+function lbSwitchSource(src){
+  _lbSource = src;
+  document.getElementById('lb-src-chesscom').className = src==='chesscom' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
+  document.getElementById('lb-src-lichess').className = src==='lichess' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
+  document.getElementById('lb-pane-chesscom').style.display = src==='chesscom' ? 'block' : 'none';
+  document.getElementById('lb-pane-lichess').style.display = src==='lichess' ? 'block' : 'none';
+  if(src==='lichess') loadLichessLeaderboard();
+}
+
+async function loadLichessLeaderboard(){
+  var type = document.getElementById('li-lb-type')?.value || 'classical';
+  var el = document.getElementById('li-leaderboard-list');
+  if(!el) return;
+  el.innerHTML = '<div class="spinner" style="margin:12px auto;display:block"></div>';
+  try{
+    var r = await fetch('https://lichess.org/api/player/top/20/'+type, {
+      headers:{'Accept':'application/vnd.lichess.v3+json'}
+    });
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    var data = await r.json();
+    var users = data.users || [];
+    if(!users.length){ el.innerHTML='<p style="color:var(--text2)">No data available.</p>'; return; }
+    el.innerHTML = users.map(function(u,i){
+      var rating = u.perfs && u.perfs[type] ? u.perfs[type].rating : (u.rating||'?');
+      var flag = u.profile && u.profile.flag ? '<img src="https://lichess1.org/assets/images/flag/'+u.profile.flag+'.png" style="width:16px;height:11px;margin-right:5px;vertical-align:middle">' : '';
+      var title = u.title ? '<span style="background:var(--accent);color:#fff;border-radius:3px;padding:0 4px;font-size:9px;margin-right:4px">'+u.title+'</span>' : '';
+      var medal = i===0?'&#129351;':i===1?'&#129352;':i===2?'&#129353;':'';
+      return '<div class="card" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px;margin-bottom:6px" data-uid="'+u.id+'" onclick="showLichessPlayer(this.dataset.uid)">'
+        +'<div style="font-size:16px;font-weight:800;color:var(--text2);width:26px;flex-shrink:0">'+(medal||i+1)+'</div>'
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="font-weight:700;font-size:13px">'+title+flag+(u.name||u.username||u.id).replace(/</g,'&lt;')+'</div>'
+        +'<div style="font-size:11px;color:var(--text2)">@'+(u.id||'')+'</div>'
+        +'</div>'
+        +'<div style="font-weight:700;color:var(--gold);font-size:15px">'+rating+'</div>'
+        +'</div>';
+    }).join('');
+  }catch(e){
+    el.innerHTML = '<p style="color:var(--red);font-size:12px">'+e.message+'</p>';
+  }
+}
+
+async function showLichessPlayer(username){
+  var modal = document.getElementById('pl-player-modal');
+  if(!modal) return;
+  modal.style.display = 'block';
+  modal.innerHTML = '<div class="card fadein"><div class="spinner" style="margin:10px auto;display:block"></div></div>';
+  modal.scrollIntoView({behavior:'smooth',block:'nearest'});
+  try{
+    var r = await fetch('https://lichess.org/api/user/'+username, {headers:{'Accept':'application/json'}});
+    if(!r.ok) throw new Error('User not found');
+    var u = await r.json();
+    var perfs = u.perfs||{};
+    var perfKeys = ['classical','rapid','blitz','bullet','ultraBullet','chess960'];
+    var ratingsHtml = perfKeys.map(function(k){
+      if(!perfs[k]) return '';
+      var p=perfs[k];
+      return '<div class="card" style="padding:8px;text-align:center">'
+        +'<div style="color:var(--text2);font-size:11px;margin-bottom:2px">'+k.charAt(0).toUpperCase()+k.slice(1)+'</div>'
+        +'<div style="font-weight:700;font-size:16px;color:var(--accent)">'+(p.rating||'?')+'</div>'
+        +'<div style="font-size:10px;color:var(--text2)">'+(p.games||0)+' games</div>'
+        +'</div>';
+    }).filter(Boolean).join('');
+
+    var titleBadge = u.title ? '<span style="background:var(--accent);color:#fff;border-radius:4px;padding:1px 7px;font-size:12px;font-weight:700;margin-right:6px">'+u.title+'</span>' : '';
+    var playingSince = u.createdAt ? new Date(u.createdAt).getFullYear() : '';
+
+    modal.innerHTML = '<div class="card fadein">'
+      +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">'
+      +'<div style="width:56px;height:56px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0">&#127821;</div>'
+      +'<div style="flex:1"><div style="font-weight:800;font-size:17px">'+titleBadge+(u.profile&&u.profile.realName||u.username).replace(/</g,'&lt;')+'</div>'
+      +'<div style="font-size:12px;color:var(--text2)">@'+u.username+(playingSince?' · since '+playingSince:'')+'</div>'
+      +(u.profile&&u.profile.bio?'<div style="font-size:11px;color:var(--text2);margin-top:3px">'+u.profile.bio.slice(0,100).replace(/</g,'&lt;')+'</div>':'')
+      +'</div>'
+      +'<button class="btn btn-ghost btn-sm" onclick="document.getElementById(\'pl-player-modal\').style.display=\'none\'" style="align-self:flex-start">&#10005;</button>'
+      +'</div>'
+      +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:7px;margin-bottom:12px">'+ratingsHtml+'</div>'
+      +'<div style="display:flex;gap:7px;flex-wrap:wrap">'
+      +'<a href="https://lichess.org/@/'+u.username+'" target="_blank" class="btn btn-ghost btn-sm">&#128279; Lichess Profile</a>'
+      +'<button class="btn btn-ghost btn-sm" data-uid="'+u.username+'" onclick="analyzeLichessAccount(this.dataset.uid)">&#128200; Analyze Account</button>'
+      +'</div>'
+      +'<div id="li-player-games" style="margin-top:12px"></div>'
+      +'</div>';
+  }catch(e){
+    modal.innerHTML = '<div class="card fadein"><p style="color:var(--red)">'+e.message+'</p></div>';
+  }
+}
+
+
+async function analyzeLichessAccount(username){
+  var el=document.getElementById('li-player-games'); if(!el) return;
+  el.innerHTML='<div style="padding:12px;text-align:center;color:var(--text2);font-size:13px">&#9203; Loading&#8230;<br><span style="font-size:11px">Fetching up to 200 recent rated games</span></div>';
+  try{
+    var r=await fetch('https://lichess.org/api/games/user/'+encodeURIComponent(username)+'?max=200&rated=true&clocks=false&evals=false&opening=false',{headers:{'Accept':'application/x-ndjson'}});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    var text=await r.text();
+    var gl=text.trim().split('\n').filter(Boolean);
+    var games=gl.map(function(line){try{return JSON.parse(line);}catch(e){return null;}}).filter(Boolean);
+    if(!games.length){el.innerHTML='<p style="color:var(--text2);font-size:12px">No rated games found.</p>';return;}
+    _renderLichessAccountStats(username,games,el);
+  }catch(e){el.innerHTML='<p style="color:var(--red);font-size:12px">Could not load: '+e.message+'</p>';}
+}
+function _renderLichessAccountStats(username,games,el){
+  var u=username.toLowerCase();
+  var wins=0,losses=0,draws=0,curWS=0,curLS=0,maxWS=0,maxLS=0,totalOppR=0,rG=0,bestWinR=0,bestWin=null;
+  var oppCount={},oppWins={},oppLoss={};
+  games.forEach(function(g){
+    var wp=(g.players&&g.players.white&&g.players.white.user&&g.players.white.user.name)||'';
+    var isW=wp.toLowerCase()===u;
+    var opp=isW?(g.players&&g.players.black):(g.players&&g.players.white);
+    var oppName=(opp&&opp.user&&opp.user.name)||'?';
+    var oppId=oppName.toLowerCase();
+    var oppR=(opp&&opp.rating)||0;
+    var won=(g.winner==='white'&&isW)||(g.winner==='black'&&!isW);
+    var lost=(g.winner==='white'&&!isW)||(g.winner==='black'&&isW);
+    if(won){wins++;curWS++;curLS=0;if(curWS>maxWS)maxWS=curWS;if(oppR>bestWinR){bestWinR=oppR;bestWin={name:oppName,rating:oppR,id:g.id};}}
+    else if(lost){losses++;curLS++;curWS=0;if(curLS>maxLS)maxLS=curLS;}
+    else{draws++;curWS=0;curLS=0;}
+    if(oppId&&oppId!=='?'){
+      if(!oppCount[oppId])oppCount[oppId]={u:oppName,c:0};oppCount[oppId].c++;
+      if(won){if(!oppWins[oppId])oppWins[oppId]={u:oppName,c:0};oppWins[oppId].c++;}
+      if(lost){if(!oppLoss[oppId])oppLoss[oppId]={u:oppName,c:0};oppLoss[oppId].c++;}
+    }
+    if(oppR>0){totalOppR+=oppR;rG++;}
+  });
+  var total=wins+losses+draws||1;
+  var avgOpp=rG?Math.round(totalOppR/rG):0;
+  var pct=function(n,t){return Math.round(n/t*100)+'%';};
+  var pill=function(label,val,col){
+    return '<div style="background:var(--bg3);border-radius:8px;padding:7px 10px;display:flex;flex-direction:column;min-width:68px;flex:1">'
+      +'<div style="font-size:10px;color:var(--text2);margin-bottom:2px">'+label+'</div>'
+      +'<div style="font-weight:800;font-size:15px;color:'+(col||'var(--text)')+'">'+val+'</div></div>';
+  };
+  var top3=function(obj){
+    return Object.values(obj).sort(function(a,b){return b.c-a.c;}).slice(0,3)
+      .map(function(x){return '<span style="background:var(--bg3);border-radius:5px;padding:2px 7px;font-size:11px;margin:2px;display:inline-block">'+x.u.replace(/</g,'&lt;')+' '+x.c+'&#215;</span>';})
+      .join('');
+  };
+  var tc=(document.getElementById('li-lb-type')||{}).value||'blitz';
+  el.innerHTML='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px">'
+    +'<div style="font-weight:700;font-size:13px;margin-bottom:10px">&#128200; Account Analysis <span style="font-size:11px;color:var(--text2);font-weight:400">(last '+games.length+' games)</span></div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">'
+    +pill('Wins',wins,'var(--green)')+pill('Losses',losses,'var(--red)')+pill('Draws',draws,'var(--text2)')
+    +pill('Win Rate',pct(wins,total),'var(--accent)')+pill('Avg Opp',avgOpp,'var(--gold)')
+    +pill('Best Streak','&#128293;'+maxWS,'var(--green)')+pill('Worst Streak','&#128128;'+maxLS,'var(--red)')
+    +'</div><div style="display:flex;flex-direction:column;gap:8px;font-size:12px">'
+    +(Object.keys(oppWins).length?'<div><span style="color:var(--text2);font-weight:600">&#127942; Most beaten opponent:</span><br><div style="margin-top:4px">'+top3(oppWins)+'</div></div>':'')
+    +(Object.keys(oppLoss).length?'<div><span style="color:var(--text2);font-weight:600">&#128556; Most losses against:</span><br><div style="margin-top:4px">'+top3(oppLoss)+'</div></div>':'')
+    +(Object.keys(oppCount).length?'<div><span style="color:var(--text2);font-weight:600">&#129309; Most played against:</span><br><div style="margin-top:4px">'+top3(oppCount)+'</div></div>':'')
+    +(bestWin?'<div><span style="color:var(--text2);font-weight:600">&#11088; Best win:</span><br><div style="margin-top:4px"><span style="background:var(--bg3);border-radius:5px;padding:2px 7px;font-size:11px">vs '+bestWin.name.replace(/</g,'&lt;')+' (rated '+bestWin.rating+') <a href="https://lichess.org/'+bestWin.id+'" target="_blank" style="color:var(--accent)">&#8599;</a></span></div></div>':'')
+    +'</div><div style="margin-top:10px;text-align:center"><a href="https://lichess.org/@/'+username+'/perf/'+tc+'" target="_blank" class="btn btn-ghost btn-sm" style="font-size:11px">Full stats on Lichess &#8599;</a></div></div>';
+}
+
+async function searchLichessUser(){
+  var username = (document.getElementById('li-search-inp')?.value||'').trim();
+  if(!username){ showToast('Enter a username'); return; }
+  showLichessPlayer(username);
+}
+
+// Auto-load lichess leaderboard when switching to lichess tab
+// (already handled by lbSwitchSource)
+</script>
+
+
+<script>
+function loadBanner2700Fallback(){
+  var el=document.getElementById('banner2700-cc');
+  if(!el) return;
+  fetch('https://api.chess.com/pub/leaderboards')
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var players=(d.live_blitz||[]).slice(0,10);
+      if(!players.length){
+        el.innerHTML='<div style="text-align:center;padding:8px;font-size:11px;color:var(--text2)">Could not load Chess.com leaderboard.</div>';
+        return;
+      }
+      var html='<table style="width:100%;border-collapse:collapse;font-size:12px">'
+        +'<tr style="border-bottom:1px solid var(--border);color:var(--text2);font-size:10px">'
+        +'<th style="padding:4px 8px;text-align:left">#</th>'
+        +'<th style="text-align:left">Player</th>'
+        +'<th style="text-align:right;padding-right:10px">Blitz</th></tr>';
+      players.forEach(function(p,i){
+        var rank=i===0?'1st':i===1?'2nd':i===2?'3rd':String(i+1)+'th';
+        var av=p.avatar?'<img src="'+p.avatar+'" style="width:20px;height:20px;border-radius:50%;vertical-align:middle;margin-right:5px">':'';
+        html+='<tr style="border-bottom:1px solid var(--border)">'
+          +'<td style="padding:5px 8px;font-weight:700;color:var(--text2)">'+rank+'</td>'
+          +'<td style="padding:5px 4px">'+av+'<a href="https://chess.com/member/'+p.username+'" target="_blank" style="color:var(--accent);text-decoration:none">'+p.username+'</a></td>'
+          +'<td style="padding:5px 10px;text-align:right;font-weight:700;font-family:monospace">'+(p.score||p.rating||'?')+'</td>'
+          +'</tr>';
+      });
+      html+='</table><div style="text-align:center;padding:5px 0 3px;font-size:10px;color:var(--text2)">Live Blitz &bull; <a href="https://chess.com/leaderboard/live" target="_blank" style="color:var(--accent)">Full leaderboard &#8599;</a></div>';
+      el.innerHTML=html;
+    })
+    .catch(function(){
+      el.innerHTML='<div style="text-align:center;padding:8px;font-size:11px;color:var(--text2)">Could not load Chess.com leaderboard.</div>';
+    });
+}
+</script>
+
 </body></html>
 
 <script>
@@ -18956,6 +19194,14 @@ async function fbLoadMyRecentGames(){
           localStorage.removeItem('c64_parental');
           _parentalState = null;
           if(typeof showToast==='function') showToast('Parental controls were reset by admin.');
+          // Clear the flag so it only triggers ONCE, not on every page load
+          window._fb.user.getIdToken().then(function(tok2){
+            fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+window._fb.user.uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=parentalResetByAdmin',{
+              method:'PATCH',
+              headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok2},
+              body:JSON.stringify({fields:{parentalResetByAdmin:{booleanValue:false}}})
+            });
+          }).catch(function(){});
         }
       }).catch(function(){});
     }
@@ -19659,13 +19905,21 @@ async function admLoadBotRequests(){
 async function admApproveBotRequest(id){
   try{
     var tok=await window._fb.user.getIdToken();
-    await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/botRequests/'+id+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=status&updateMask.fieldPaths=approved',{
+    var editedName=(document.getElementById('botreq-name-'+id)||{}).value||'';
+    var editedNotes=(document.getElementById('botreq-notes-'+id)||{}).value||'';
+    var fields={status:{stringValue:'approved'},approved:{booleanValue:true}};
+    if(editedName) fields.name={stringValue:editedName};
+    if(editedNotes) fields.notes={stringValue:editedNotes};
+    var maskFields=['status','approved'];
+    if(editedName) maskFields.push('name');
+    if(editedNotes) maskFields.push('notes');
+    var mask=maskFields.map(function(f){return 'updateMask.fieldPaths='+f;}).join('&');
+    await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/botRequests/'+id+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&'+mask,{
       method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
-      body:JSON.stringify({fields:{status:{stringValue:'approved'},approved:{booleanValue:true}}})
+      body:JSON.stringify({fields:fields})
     });
     showToast('Bot approved! It will appear in Community Bots.');
     admLoadBotRequests();
-    // Reload community bots on play page
     setTimeout(loadCommunityBots,500);
   }catch(e){showToast('Error: '+e.message);}
 }
@@ -19681,32 +19935,163 @@ async function admDenyBotRequest(id){
 }
 
 // Load community bots on play page
+function selectCommunityBot(idx){
+  var bots=window._communityBots;
+  if(!bots||!bots[idx]) return;
+  var b=bots[idx];
+  if(typeof selectBot==='function') selectBot(b);
+}
 async function loadCommunityBots(){
+  var section=document.getElementById('community-bots-section');
+  var grid=document.getElementById('community-bot-grid');
+  if(!section||!grid) return;
+  section.style.display='block';
+  grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:10px;color:var(--text2);font-size:11px">Loading&#8230;</div>';
   try{
     var r=await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents:runQuery?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({structuredQuery:{from:[{collectionId:'botRequests'}],where:{fieldFilter:{field:{fieldPath:'approved'},op:'EQUAL',value:{booleanValue:true}}},limit:30}})
+      body:JSON.stringify({structuredQuery:{from:[{collectionId:'botRequests'}],where:{compositeFilter:{op:'AND',filters:[{fieldFilter:{field:{fieldPath:'approved'},op:'EQUAL',value:{booleanValue:true}}},{fieldFilter:{field:{fieldPath:'status'},op:'EQUAL',value:{stringValue:'approved'}}}]}},limit:30}})
     });
     var docs=await r.json();
     var bots=(Array.isArray(docs)?docs:[docs]).filter(function(d){return d.document;}).map(function(d){
-      var f=d.document.fields||{};var g=function(k){return (f[k]&&(f[k].stringValue||f[k].integerValue))||'';};
-      return {id:d.document.name.split('/').pop(),name:g('name'),rating:parseInt(g('rating'))||1200,depth:parseInt(g('depth'))||2,style:g('style'),emoji:'&#129302;',desc:'Community bot by '+g('submittedBy'),isCommunity:true};
+      var f=d.document.fields||{};
+      var g=function(k){return(f[k]&&(f[k].stringValue||f[k].integerValue))||'';};
+      var nm=g('name')||'Community Bot';
+      var rt=parseInt(g('rating'))||1200;
+      return {
+        id:d.document.name.split('/').pop(),
+        name:nm, rating:rt,
+        depth:parseInt(g('depth'))||2, style:g('style')||'balanced',
+        rand:parseFloat(g('rand'))||0.5, opening:g('opening')||'',
+        submittedBy:g('submittedBy'), notes:g('notes'), trash:g('trash'),
+        emoji:'&#129302;',
+        desc:g('notes')||('Community bot \u2014 Rating: '+rt),
+        delay:400
+      };
     });
-    var section=document.getElementById('community-bots-section');
-    var grid=document.getElementById('community-bot-grid');
-    if(!section||!grid) return;
-    if(!bots.length){ section.style.display='none'; return; }
-    section.style.display='block';
-    grid.innerHTML=bots.map(function(b){
-      return '<div class="bot-card" onclick="selectBot('+JSON.stringify(b)+')" style="cursor:pointer;background:var(--bg3);border-radius:8px;padding:8px;text-align:center;border:1px solid var(--border)">'
+    if(!bots.length){
+      grid.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--text2);font-size:11px;padding:10px">No community bots approved yet. Submit your own in the Custom Bot tab!</div>';
+      return;
+    }
+    // Store bots globally so onclick can reference by index (avoids JSON quote issues)
+    window._communityBots = bots;
+    grid.innerHTML=bots.map(function(b,idx){
+      var esc=function(s){return s?s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'):'';};
+      var commentary=esc(b.notes||b.trash||'');
+      return '<div style="background:var(--bg3);border-radius:8px;padding:8px;text-align:center;display:flex;flex-direction:column;gap:2px">'
+        +'<div style="cursor:pointer" onclick="selectCommunityBot('+idx+')">'
         +'<div style="font-size:20px">&#129302;</div>'
-        +'<div style="font-weight:700;font-size:11px;margin-top:3px">'+b.name.replace(/</g,'&lt;')+'</div>'
+        +'<div style="font-weight:700;font-size:11px;margin-top:3px">'+esc(b.name)+'</div>'
         +'<div style="font-size:10px;color:var(--accent)">&#9733; '+b.rating+'</div>'
+        +(b.submittedBy?'<div style="font-size:9px;color:var(--text2)">by '+esc(b.submittedBy)+'</div>':'')
+        +(commentary?'<div style="font-size:9px;color:var(--text2);font-style:italic;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+commentary+'</div>':'')
+        +'</div>'
+        +'<button class="btn btn-primary btn-sm" style="font-size:9px;padding:2px 6px;margin-top:3px" onclick="selectCommunityBot('+idx+');newGame()">&#9654; Play</button>'
         +'</div>';
     }).join('');
-  }catch(e){}
+  }catch(e){
+    grid.innerHTML='<div style="grid-column:1/-1;color:var(--text2);font-size:11px;padding:8px;text-align:center">Could not load community bots: '+e.message+'</div>';
+  }
+}
+
+function selectCommunityBot(idx){
+  var b = window._communityBots && window._communityBots[idx];
+  if(!b){ if(typeof showToast==='function') showToast('Bot not found.'); return; }
+  if(typeof selectBot==='function') selectBot(b);
+  if(typeof navTo==='function') navTo('play');
 }
 // Load community bots when play page opens
 (function(){var _o=window.navTo;window.navTo=function(p){if(_o)_o(p);if(p==='play')setTimeout(loadCommunityBots,300);};})();
 
-</script> <
+</script>
+
+<script>
+/* ── Admin: Load & manage approved community bots ──────────────── */
+async function admLoadApprovedBots(){
+  var el=document.getElementById('adm-custbots-list'); if(!el) return;
+  el.innerHTML='<div style="color:var(--text2);font-size:12px">Loading approved bots&#8230;</div>';
+  try{
+    var tok=await window._fb.user.getIdToken();
+    var r=await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents:runQuery?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
+      method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+      body:JSON.stringify({structuredQuery:{from:[{collectionId:'botRequests'}],where:{fieldFilter:{field:{fieldPath:'approved'},op:'EQUAL',value:{booleanValue:true}}},limit:50}})
+    });
+    var docs=await r.json();
+    var bots=(Array.isArray(docs)?docs:[docs]).filter(function(d){return d.document;}).map(function(d){
+      var f=d.document.fields||{}; var g=function(k){return(f[k]&&(f[k].stringValue||f[k].integerValue))||'';};
+      return {id:d.document.name.split('/').pop(),name:g('name'),rating:g('rating'),depth:g('depth'),style:g('style'),notes:g('notes'),trash:g('trash'),submittedBy:g('submittedBy')};
+    });
+    if(!bots.length){el.innerHTML='<p style="color:var(--text2);font-size:12px">No approved bots yet.</p>';return;}
+    var html='<div style="font-size:11px;color:var(--text2);margin-bottom:6px">'+bots.length+' approved bot(s)</div>';
+    bots.forEach(function(b){
+      var sid=b.id.replace(/['"]/g,'');
+      html+='<div style="padding:9px;border-bottom:1px solid var(--border)" id="ab-row-'+sid+'">';
+      html+='<div style="font-weight:600;font-size:12px">&#129302; '+(b.name||'').replace(/</g,'&lt;')+'</div>';
+      html+='<div style="font-size:11px;color:var(--text2);margin-bottom:5px">Rating: '+b.rating+' &bull; Depth: '+b.depth+' &bull; Style: '+b.style+(b.submittedBy?' &bull; by '+(b.submittedBy||'').replace(/</g,'&lt;'):'')+'</div>';
+      html+='<div id="ab-edit-'+sid+'" style="display:none;flex-direction:column;gap:4px;margin-bottom:6px">';
+      html+='<label style="font-size:10px;color:var(--text2)">Name:</label><input id="abe-name-'+sid+'" value="'+(b.name||'').replace(/"/g,'&quot;')+'" style="width:100%;padding:4px 7px;background:var(--bg2);border:1px solid var(--border);border-radius:5px;font-size:11px;color:var(--text)">';
+      html+='<label style="font-size:10px;color:var(--text2);margin-top:3px">Rating:</label><input id="abe-rating-'+sid+'" type="number" value="'+b.rating+'" style="width:100%;padding:4px 7px;background:var(--bg2);border:1px solid var(--border);border-radius:5px;font-size:11px;color:var(--text)">';
+      html+='<label style="font-size:10px;color:var(--text2);margin-top:3px">Depth (1-5):</label><input id="abe-depth-'+sid+'" type="number" min="1" max="5" value="'+b.depth+'" style="width:100%;padding:4px 7px;background:var(--bg2);border:1px solid var(--border);border-radius:5px;font-size:11px;color:var(--text)">';
+      html+='<label style="font-size:10px;color:var(--text2);margin-top:3px">Style:</label><select id="abe-style-'+sid+'" style="width:100%;padding:4px 7px;background:var(--bg2);border:1px solid var(--border);border-radius:5px;font-size:11px;color:var(--text)"><option'+(b.style==='balanced'?' selected':'')+'>balanced</option><option'+(b.style==='aggressive'?' selected':'')+'>aggressive</option><option'+(b.style==='defensive'?' selected':'')+'>defensive</option><option'+(b.style==='positional'?' selected':'')+'>positional</option></select>';
+      html+='<label style="font-size:10px;color:var(--text2);margin-top:3px">Public commentary:</label><textarea id="abe-notes-'+sid+'" rows="2" style="width:100%;padding:4px 7px;background:var(--bg2);border:1px solid var(--border);border-radius:5px;font-size:11px;color:var(--text);resize:vertical">'+(b.notes||'').replace(/</g,'&lt;')+'</textarea>';
+      html+='<label style="font-size:10px;color:var(--text2);margin-top:3px">Trash talk:</label><input id="abe-trash-'+sid+'" value="'+(b.trash||'').replace(/"/g,'&quot;')+'" style="width:100%;padding:4px 7px;background:var(--bg2);border:1px solid var(--border);border-radius:5px;font-size:11px;color:var(--text)">';
+      html+='</div>';
+      html+='<div style="display:flex;gap:5px">';
+      html+='<button class="btn btn-ghost btn-sm" style="font-size:10px" data-id="'+sid+'" onclick="admToggleBotEdit(this.dataset.id)">&#9998; Edit</button>';
+      html+='<button class="btn btn-primary btn-sm" style="font-size:10px;display:none" id="ab-save-'+sid+'" data-id="'+sid+'" onclick="admSaveApprovedBot(this.dataset.id)">&#10003; Save</button>';
+      html+='<button class="btn btn-ghost btn-sm" style="font-size:10px;color:var(--red)" data-id="'+sid+'" data-name="'+(b.name||'').replace(/"/g,'&quot;').replace(/</g,'&lt;')+'" onclick="admDeleteApprovedBot(this.dataset.id,this.dataset.name)">&#128465; Delete</button>';
+      html+='</div></div>';
+    });
+    el.innerHTML=html;
+  }catch(e){el.innerHTML='<p style="color:var(--red);font-size:12px">'+e.message+'</p>';}
+}
+
+function admToggleBotEdit(id){
+  var d=document.getElementById('ab-edit-'+id);
+  var s=document.getElementById('ab-save-'+id);
+  if(!d) return;
+  var show=d.style.display!=='flex';
+  d.style.display=show?'flex':'none';
+  if(s) s.style.display=show?'inline-flex':'none';
+}
+
+async function admSaveApprovedBot(id){
+  try{
+    var tok=await window._fb.user.getIdToken();
+    var fields={};
+    var name=(document.getElementById('abe-name-'+id)||{}).value||'';
+    var rating=(document.getElementById('abe-rating-'+id)||{}).value||'';
+    var depth=(document.getElementById('abe-depth-'+id)||{}).value||'';
+    var style=(document.getElementById('abe-style-'+id)||{}).value||'';
+    var notes=(document.getElementById('abe-notes-'+id)||{}).value||'';
+    var trash=(document.getElementById('abe-trash-'+id)||{}).value||'';
+    if(name) fields.name={stringValue:name};
+    if(rating) fields.rating={integerValue:String(parseInt(rating))};
+    if(depth) fields.depth={integerValue:String(parseInt(depth))};
+    if(style) fields.style={stringValue:style};
+    fields.notes={stringValue:notes};
+    fields.trash={stringValue:trash};
+    var mask=Object.keys(fields).map(function(k){return 'updateMask.fieldPaths='+k;}).join('&');
+    await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/botRequests/'+id+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&'+mask,{
+      method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+      body:JSON.stringify({fields:fields})
+    });
+    showToast('&#10003; Bot updated!');
+    admToggleBotEdit(id);
+    setTimeout(loadCommunityBots,500);
+  }catch(e){showToast('Error: '+e.message);}
+}
+
+async function admDeleteApprovedBot(id,name){
+  if(!confirm('Delete community bot "'+name+'"? This cannot be undone.')) return;
+  try{
+    var tok=await window._fb.user.getIdToken();
+    await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/botRequests/'+id+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
+      method:'DELETE',headers:{'Authorization':'Bearer '+tok}
+    });
+    showToast('Bot deleted.');
+    admLoadApprovedBots();
+    setTimeout(loadCommunityBots,500);
+  }catch(e){showToast('Error: '+e.message);}
+}
+</script>
