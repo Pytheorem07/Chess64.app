@@ -344,7 +344,7 @@ import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWith
          linkWithCredential, EmailAuthProvider }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc,
-         collection, getDocs, query, orderBy, limit, where, serverTimestamp, increment,
+         collection, getDocs, getDocFromServer, getDocsFromServer, query, orderBy, limit, where, serverTimestamp, increment,
          onSnapshot }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
@@ -1269,8 +1269,8 @@ window._fb = {
   // ── ANALYTICS ────────────────────────────────────────────────
   async getAnalytics(){
     if(!_isAdmin || !_db) return null;
-    // Users count + recent activity
-    const usersSnap = await getDocs(collection(_db,'users'));
+    // Users count + recent activity — getDocsFromServer bypasses SDK cache
+    const usersSnap = await getDocsFromServer(collection(_db,'users'));
     const users = usersSnap.docs.map(d=>({uid:d.id,id:d.id,...d.data()}));
     const now = Date.now();
     const day = 86400000;
@@ -1485,6 +1485,7 @@ if(_fbReady && _auth){
     <button class="nav-btn nav-group-btn" onclick="navToggleGroup('ng-more')">• • • ▾</button>
     <div class="nav-dropdown">
       <button class="nav-dd-item" onclick="navTo('mission');navCloseAll()" data-page="mission">💡 Mission</button>
+      <button class="nav-dd-item" onclick="navTo('tilted');navCloseAll()" data-page="tilted">🎮 Tilted?</button>
       <button class="nav-dd-item" onclick="(function(){navTo('quotes');navCloseAll();var _t=0;function _try(){var el=document.getElementById('page-quotes');if(!el)return;var b=document.getElementById('v12-quotes-body');if(!b||!b.children.length){try{v12InitQuotes();}catch(e){}}if(++_t<5)setTimeout(_try,150);}setTimeout(_try,80);})()">💬 Quotes</button>
       <button class="nav-dd-item" onclick="navTo('feedback');navCloseAll()">📩 Feedback</button>
       <button class="nav-dd-item" onclick="navTo('settings');navCloseAll()">⚙️ Settings</button>
@@ -2217,7 +2218,8 @@ if(_fbReady && _auth){
             <button class="btn btn-ghost btn-sm" onclick="opFlip()">&#8660; Flip</button>
             <button class="btn btn-ghost btn-sm" onclick="opUndo()">&#8617; Back</button>
             <button class="btn btn-ghost btn-sm" onclick="opReset()">&#128260; Reset</button>
-            <button onclick="showCurrentOpTheory()" style="font-size:11px;border:1px solid var(--accent);color:var(--accent);background:none;border-radius:4px;padding:2px 7px;cursor:pointer">&#128218; Theory</button>
+            <button id="op-theory-highlight-btn" onclick="showCurrentOpTheory()" style="font-size:11px;border:1px solid var(--accent);color:var(--accent);background:none;border-radius:4px;padding:2px 7px;cursor:pointer">&#128218; Theory</button>
+            <button id="op-source-btn" onclick="opToggleSource()" style="font-size:11px;background:none;border:1px solid var(--border);color:var(--text2);border-radius:4px;padding:2px 7px;cursor:pointer" title="Built-in book &#8644; ChessDB">&#127760; ChessDB</button>
           </div>
           <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><div style="font-size:11px;color:var(--text2);word-break:break-all;flex:1" id="op-fen-line"></div><button id="op-explorer-theory-btn" onclick="opShowCurrentTheory()" style="display:none;font-size:11px;background:none;border:1px solid var(--accent);color:var(--accent);border-radius:5px;padding:2px 10px;cursor:pointer;white-space:nowrap">&#128218; Theory</button></div>
         </div>
@@ -2282,7 +2284,8 @@ if(_fbReady && _auth){
             </div>
             <div style="flex:1;min-width:220px" class="card">
               <h3 id="comm-study-title" style="margin-bottom:2px">Study</h3>
-              <div id="comm-study-author" style="font-size:11px;color:var(--text2);margin-bottom:10px"></div>
+              <div id="comm-study-author" style="font-size:11px;color:var(--text2);margin-bottom:4px"></div>
+              <div style="margin-bottom:8px"><span id="comm-study-category" style="font-size:10px;background:var(--accent);color:#fff;border-radius:3px;padding:1px 6px"></span></div>
               <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><button id="cs-like-btn" onclick="csToggleLike()" style="background:none;border:1px solid var(--border);border-radius:20px;padding:3px 12px;cursor:pointer;font-size:12px;color:var(--text2)">&#9825; <span id="cs-like-count">0</span></button><span style="font-size:11px;color:var(--text2)">&#128172; <span id="cs-comment-count">0</span></span></div>
               <div id="comm-study-comment" style="font-size:13px;line-height:1.7;background:var(--bg3);padding:12px;border-radius:8px;min-height:60px;border-left:3px solid var(--accent);color:var(--text)">Navigate moves to see annotations.</div>
               <div id="comm-study-moves" style="margin-top:10px;max-height:180px;overflow-y:auto;font-size:12px;font-family:monospace"></div>
@@ -2306,6 +2309,7 @@ if(_fbReady && _auth){
           <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Play moves on the board. After each move, add a comment explaining the idea. Publish for everyone to learn from.</p>
           <div style="margin-bottom:10px">
             <input id="cs-title" type="text" maxlength="60" placeholder="Study title e.g. Italian Game — Key Ideas" style="width:100%;padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+              <select id="cs-category" style="width:100%;padding:7px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;margin-bottom:8px"><option value="opening">Opening</option><option value="middlegame">Middlegame</option><option value="endgame">Endgame</option><option value="tactic">Tactic</option></select>
             <input id="cs-desc" type="text" maxlength="120" placeholder="Brief description (optional)..." style="width:100%;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;margin-bottom:8px">
           </div>
           <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">
@@ -5998,6 +6002,7 @@ function searchPlayer(){
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
         <button class="btn btn-primary btn-sm" onclick="loadCCGames('${u}',true)">&#128196; Load Games</button>
+          <button class="btn btn-ghost btn-sm" onclick="loadCCRecentGames(_ccUsername)">&#128336; Recent (30 days)</button>
         <a href="https://www.chess.com/member/${u}" target="_blank" class="btn btn-ghost btn-sm">Chess.com &#8599;</a>
         <button class="btn btn-ghost btn-sm" onclick="analyzeAccount('${u}')" style="background:linear-gradient(135deg,var(--accent),#8b5cf6);color:#fff;border:none">&#128202; Analyze Account</button>
       </div>
@@ -6123,11 +6128,14 @@ function renderCCGames(username,el){
       const pgn=g.pgn||'';
       if(!window._ccPgnCache)window._ccPgnCache=[];
       const pgnIdx=window._ccPgnCache.push(pgn)-1;
-      return `<div class="op-game-row" onclick="analyzeCCGameIdx(${pgnIdx})">
-        <span style="color:${isW?'#111':'#eee'};background:${isW?'#ddd':'#555'};border-radius:3px;padding:1px 5px;font-size:10px;font-weight:700;flex-shrink:0">${isW?'W':'B'}</span>
-        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0 5px">vs ${opp}${tc}</span>
-        <span style="color:var(--text2);font-size:11px">${myR||'?'}</span>
-        <span style="color:${col};font-weight:700;font-size:11px;margin-left:5px">${res}</span>
+      return `<div class="op-game-row" style="display:flex;align-items:center;gap:4px">
+        <div style="flex:1;display:flex;align-items:center;gap:4px;cursor:pointer;overflow:hidden" onclick="analyzeCCGameIdx(${pgnIdx})">
+          <span style="color:${isW?'#111':'#eee'};background:${isW?'#ddd':'#555'};border-radius:3px;padding:1px 5px;font-size:10px;font-weight:700;flex-shrink:0">${isW?'W':'B'}</span>
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0 4px">vs ${opp}${tc}</span>
+          <span style="color:var(--text2);font-size:11px">${myR||'?'}</span>
+          <span style="color:${col};font-weight:700;font-size:11px;margin-left:3px">${res}</span>
+        </div>
+        <button onclick="event.stopPropagation();copyCCPgn(${pgnIdx})" title="Copy PGN" style="background:none;border:1px solid var(--border);border-radius:4px;padding:2px 6px;cursor:pointer;font-size:10px;color:var(--text2);flex-shrink:0">&#128203;</button>
       </div>`;
     }).join('')+
     (_ccGamesCache.length>_ccGamesOffset?`<button class="btn btn-ghost btn-sm" style="width:100%;margin-top:7px" onclick="loadCCGames('${username}',false)">Load 30 More...</button>`:'');
@@ -12456,6 +12464,8 @@ function artPreview(){
         <div style="display:flex;align-items:flex-start;gap:12px;padding:10px;background:var(--bg3);border-radius:8px"><div style="font-size:28px;flex-shrink:0">&#127760;</div><div><div style="font-weight:700"><a href="https://2700chess.com" target="_blank" style="color:var(--accent);text-decoration:none">2700chess.com</a></div><div style="font-size:12px;color:var(--text2)">Live top-player ratings banner displayed on the Notable Players page. A great resource for following elite chess.</div></div></div>
         <div style="display:flex;align-items:flex-start;gap:12px;padding:10px;background:var(--bg3);border-radius:8px"><div style="font-size:28px;flex-shrink:0">&#128293;</div><div><div style="font-weight:700"><a href="https://firebase.google.com" target="_blank" style="color:var(--accent);text-decoration:none">Firebase / Google</a></div><div style="font-size:12px;color:var(--text2)">Authentication, real-time database, and infrastructure powering all user accounts, online games, chat, community features, and cloud sync.</div></div></div>
         <div style="display:flex;align-items:flex-start;gap:12px;padding:10px;background:var(--bg3);border-radius:8px"><div style="font-size:28px;flex-shrink:0">&#127925;</div><div><div style="font-weight:700"><a href="https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/" target="_blank" style="color:var(--accent);text-decoration:none">Apple / iTunes Search API</a></div><div style="font-size:12px;color:var(--text2)">Song search and 30-second preview clips provided free via Apple's iTunes Search API, powering the Chess64 music player feature.</div></div></div>
+        <div style="display:flex;align-items:flex-start;gap:12px;padding:10px;background:var(--bg3);border-radius:8px"><div style="font-size:28px">&#9812;</div><div><strong>Chessground</strong> &mdash; <a href="https://github.com/lichess-org/chessground" target="_blank" style="color:var(--accent)">Lichess-org</a><br><span style="font-size:12px;color:var(--text2)">The beautiful open-source chess board from the Lichess project.</span></div></div>
+        <div style="display:flex;align-items:flex-start;gap:12px;padding:10px;background:var(--bg3);border-radius:8px"><div style="font-size:28px">&#127760;</div><div><strong>ChessDB Cloud Database</strong> &mdash; <a href="https://chessdb.cn/queryc_en/" target="_blank" style="color:var(--accent)">chessdb.cn</a><br><span style="font-size:12px;color:var(--text2)">Open cloud opening database for live position analysis in the explorer.</span></div></div>
       </div>
     </div>
     <div class="card section" style="text-align:center">
@@ -17396,9 +17406,13 @@ async function admApproveRename(el){
       method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
       body:JSON.stringify({fields:{status:{stringValue:'approved'}}})
     });
-    if(typeof showToast==='function') showToast('Username changed! Reload page to see update.');
-    setTimeout(function(){admLoadUsernameRequests();},1500);
-  }catch(e){if(typeof showToast==='function') showToast('Error: '+e.message);}
+
+    // SDK write clears Firestore cache so admin list refreshes correctly
+    if(window._fbSdk&&window._fbSdk.db()){try{window._fbSdk.updateDoc(window._fbSdk.doc(window._fbSdk.db(),'users',uid),{displayName:name});}catch(_){}}
+    if(typeof showToast==='function') showToast('Username changed to "'+name+'"!');
+    _admUpdateNameEverywhere(uid,name);
+    setTimeout(function(){admLoadUsernameRequests();},800);
+  }catch(e){if(typeof showToast==='function')showToast('Error: '+e.message);}
 }
 async function admDenyRename(el){
   var uid=el.dataset.uid;
@@ -17688,7 +17702,7 @@ function fbUploadPhotoFile(input){
 })();
 
 // ── PARENTAL CONTROLS ─────────────────────────────────────────────
-var _PARENTAL_PAGES = ['chat','forums','articles','players','events','music'];
+var _PARENTAL_PAGES = ['chat','forums','articles','players','events','music','tilted'];
 var _parentalState = null;
 
 function parentalLoad(){
@@ -17756,7 +17770,7 @@ function parentalShowSetup(){
     +(state.enabled?'<div style="margin-bottom:12px"><div style="font-weight:700;font-size:13px;margin-bottom:8px">Blocked Pages:</div>'
     +_PARENTAL_PAGES.map(function(page){
       var isBlocked=blocked[page]?true:false;
-      var labels={chat:'Messages/Chat',forums:'Forums',articles:'Articles',players:'Players',events:'Events',music:'Music Player'};
+      var labels={chat:'Messages/Chat',forums:'Forums',articles:'Articles',players:'Players',events:'Events',music:'Music Player',tilted:'Tilted? (Game)'};
       return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">'
         +'<span style="font-size:13px">'+labels[page]+'</span>'
         +'<div style="width:36px;height:20px;border-radius:10px;background:'+(isBlocked?'var(--accent)':'#555')+';cursor:pointer;position:relative;transition:background .2s" '
@@ -17765,8 +17779,20 @@ function parentalShowSetup(){
         +'</div></div>';
     }).join('')+'</div>':'')
     +'<div id="parental-form-area"></div>'
+    +'<hr style="margin:16px 0;border-color:var(--border)">'
+    +'<div style="margin-bottom:10px">'
+    +'<div style="font-weight:700;font-size:13px;margin-bottom:6px">&#128421; Local Device Parental Controls</div>'
+    +'<div style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.6">'
+    +'Local controls lock <strong>this device</strong> regardless of which account is signed in. '
+    +'Use this to protect shared devices. Controls are stored on-device (not in your account), '
+    +'so they work even offline and cannot be bypassed by switching accounts. '
+    +'Secured with a separate SHA-256 PIN. '
+    +'For per-account restrictions, use the Account Parental Controls above.</div>'
+    +'<button id="local-parental-toggle-btn" class="btn btn-ghost" onclick="localParentalGetState().enabled?localParentalDisable():localParentalEnable()" style="width:100%;margin-bottom:6px">&#128274; Enable Local Parental Controls on This Device</button>'
+    +'</div>'
     +'</div>';
   document.body.appendChild(modal);
+  localParentalRefreshUI();
 }
 
 async function parentalTogglePage(page, el){
@@ -20775,30 +20801,31 @@ body.mp-open{ padding-bottom:52px; }
     if(!loadMore&&el) el.innerHTML='<div class="mp-empty">Searching&#8230;</div>';
     try{
       var searchQ=window._mpSearchQuery||q;
-      var offset=loadMore?(window._mpSearchOffset||0):0;
-      var r=await fetch('https://itunes.apple.com/search?term='+encodeURIComponent(searchQ)+'&entity=song&limit=20&offset='+offset+'&media=music');
+      var fetchLimit=loadMore?Math.min(200,(window._mpSearchOffset||0)+50):50;
+      var r=await fetch('https://itunes.apple.com/search?term='+encodeURIComponent(searchQ)+'&entity=song&limit='+fetchLimit+'&media=music');
       var d=await r.json();
       var tracks=(d.results||[]).filter(function(t){return t.previewUrl;});
       if(!loadMore){
         if(!tracks.length){if(el)el.innerHTML='<div class="mp-empty">No results found.</div>';return;}
         _queue=tracks;_qIdx=0;
-        window._mpSearchOffset=20;
+        window._mpSearchOffset=50;
         if(el) el.innerHTML=tracks.map(function(t,i){return mpTrackHtml(t,i,'q');}).join('');
       } else {
         var startIdx=_queue.length;
         var newTracks=tracks.filter(function(nt){return !_queue.some(function(qt){return qt.trackId===nt.trackId;});});
         _queue=_queue.concat(newTracks);
-        window._mpSearchOffset=(offset+20);
-        if(el&&newTracks.length){
+        window._mpSearchOffset=fetchLimit;
+        if(newTracks.length){
           var loadBtn=document.getElementById('mp-load-more-btn');
           var frag=newTracks.map(function(t,i){return mpTrackHtml(t,startIdx+i,'q');}).join('');
-          if(loadBtn){loadBtn.insertAdjacentHTML('beforebegin',frag);}else{el.insertAdjacentHTML('beforeend',frag);}
+          if(loadBtn)loadBtn.insertAdjacentHTML('beforebegin',frag);else if(el)el.insertAdjacentHTML('beforeend',frag);
+        } else {
+          var lb2=document.getElementById('mp-load-more-btn');
+          if(lb2) lb2.innerHTML='<div style="padding:8px;text-align:center;font-size:12px;color:rgba(255,255,255,.4)">&#10003; No more results.</div>';
+          return;
         }
       }
-      // Add Load More button
-      if(!document.getElementById('mp-load-more-btn')&&el){
-        el.insertAdjacentHTML('beforeend','<div id="mp-load-more-btn" style="padding:8px 14px"><button class="mp-btn" onclick="mpSearch(true)" style="width:100%;padding:8px;background:rgba(255,255,255,.1);border-radius:8px;font-size:12px;border:1px solid rgba(255,255,255,.15)">&#8595; Load More Results</button></div>');
-      }
+
     }catch(e){
       if(el&&!loadMore) el.innerHTML='<div class="mp-empty">Search failed: '+e.message+'</div>';
     }
@@ -21375,7 +21402,9 @@ var _PARENTAL_BLOCKED_DOMAINS=[
   '2700chess.com',
   'wikimedia.org','upload.wikimedia.org',
   'stockfishchess.org','github.com/official-stockfish',
-  'firebase.google.com','firestore.googleapis.com'
+  'firebase.google.com','firestore.googleapis.com',
+  'chessdb.cn','www.chessdb.cn',
+  'github.com/lichess-org'
 ];
 
 function parentalBlockLinks(){
@@ -21742,7 +21771,7 @@ async function commStudyLoad(){
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({structuredQuery:{from:[{collectionId:'communityStudies'}],
         where:{fieldFilter:{field:{fieldPath:'published'},op:'EQUAL',value:{booleanValue:true}}},
-        orderBy:[{field:{fieldPath:'createdAt'},direction:'DESCENDING'}],limit:50}})
+        limit:50}})
     });
     var raw=await r.json();
     _commStudies=(Array.isArray(raw)?raw:[raw]).filter(function(x){return x.document;}).map(function(x){
@@ -21758,6 +21787,7 @@ async function commStudyLoad(){
       return {id:id,title:g('title')||'Untitled Study',author:g('authorName')||'Anonymous',
         authorUid:g('authorUid'),moves:moves,description:g('description')||'',createdAt:g('createdAt')};
     });
+    _commStudies.sort(function(a,b){return (b.createdAt||'').localeCompare(a.createdAt||'');});
     commStudyRender(_commStudies);
   }catch(e){el.innerHTML='<div style="color:var(--red)">'+e.message+'</div>';}
 }
@@ -21954,14 +21984,17 @@ async function csPublish(){
   try{
     var tok=await window._fb.user.getIdToken();
     var moveValues=_csMoves.map(function(mv){return {mapValue:{fields:{san:{stringValue:mv.san},comment:{stringValue:mv.comment||''}}}};});
+    var catEl=document.getElementById('cs-category');
+    var cat=catEl?catEl.value:'opening';
     var body={fields:{
       title:{stringValue:title.trim()},
       authorName:{stringValue:window._fb.user.displayName||'Anonymous'},
       authorUid:{stringValue:window._fb.user.uid},
-      description:{stringValue:(document.getElementById('cs-desc')&&document.getElementById('cs-desc').value.trim())||_csMoves.length+' moves'},
+      description:{stringValue:(document.getElementById('cs-desc')&&document.getElementById('cs-desc').value.trim())||''},
+      category:{stringValue:cat},
       moves:{arrayValue:{values:moveValues}},
       published:{booleanValue:true},
-      createdAt:{stringValue:new Date().toISOString()}
+      createdAt:{timestampValue:new Date().toISOString()}
     }};
     await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/communityStudies?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
       method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
@@ -22227,8 +22260,11 @@ async function admSaveUsername(uid, oldName){
       });
     }catch(e2){}
     document.getElementById('adm-detail-modal').style.display='none';
-    showToast('Username changed to: '+newName);
-    if(typeof fbLoadAdminUsers==='function') fbLoadAdminUsers();
+    if(window._fbSdk&&window._fbSdk.db()){try{window._fbSdk.updateDoc(window._fbSdk.doc(window._fbSdk.db(),'users',uid),{displayName:newName});}catch(_){}}
+    showToast('Username changed to: '+newName+'!');
+    _admUpdateNameEverywhere(uid,newName);
+    setTimeout(function(){if(typeof fbLoadAdminUsers==='function') fbLoadAdminUsers();},1200);
+
   }catch(e){showToast('Error: '+e.message);}
 }
 </script>
@@ -22344,13 +22380,16 @@ async function artLoadComments(articleId){
   if(loginEl) loginEl.style.display=isLoggedIn?'none':'block';
   listEl.innerHTML='<div style="color:var(--text2);font-size:12px">Loading comments...</div>';
   try{
-    var hdrs={}; if(window._fb&&window._fb.user){try{hdrs['Authorization']='Bearer '+(await window._fb.user.getIdToken());}catch(e){}}
+    // articleComments is public - no auth needed, but include if available
+    var _artHdrs={'Content-Type':'application/json'};
+    try{if(window._fb&&window._fb.user)_artHdrs['Authorization']='Bearer '+(await window._fb.user.getIdToken());}catch(e){}
     var r=await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents:runQuery?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
-      method:'POST',headers:Object.assign({'Content-Type':'application/json'},hdrs),
-      body:JSON.stringify({structuredQuery:{from:[{collectionId:'articleComments'}],where:{fieldFilter:{field:{fieldPath:'articleId'},op:'EQUAL',value:{stringValue:articleId}}},orderBy:[{field:{fieldPath:'createdAt'},direction:'ASCENDING'}],limit:50}})
+      method:'POST',headers:_artHdrs,
+      body:JSON.stringify({structuredQuery:{from:[{collectionId:'articleComments'}],where:{fieldFilter:{field:{fieldPath:'articleId'},op:'EQUAL',value:{stringValue:articleId}}},limit:50}})
     });
     var raw=await r.json();
     var docs=(Array.isArray(raw)?raw:[]).filter(function(x){return x.document;}).map(function(x){return x.document;});
+    docs.sort(function(a,b){var ta=(a.fields&&a.fields.createdAt&&a.fields.createdAt.timestampValue)||'';var tb=(b.fields&&b.fields.createdAt&&b.fields.createdAt.timestampValue)||'';return ta.localeCompare(tb);});
     if(countEl) countEl.textContent=docs.length;
     if(!docs.length){listEl.innerHTML='<div style="color:var(--text2);font-size:12px;padding:8px 0">No comments yet. Be first!</div>';return;}
     var myUid=window._fb&&window._fb.user?window._fb.user.uid:'';
@@ -22570,14 +22609,15 @@ async function csLoadComments(studyId){
   if(formEl) formEl.style.display=isLoggedIn?'block':'none';
   if(loginEl) loginEl.style.display=isLoggedIn?'none':'block';
   try{
-    var hdrs={'Content-Type':'application/json'};
-    if(window._fb&&window._fb.user){try{hdrs['Authorization']='Bearer '+(await window._fb.user.getIdToken());}catch(e){}}
+    var _csHdrs={'Content-Type':'application/json'};
+    try{if(window._fb&&window._fb.user)_csHdrs['Authorization']='Bearer '+(await window._fb.user.getIdToken());}catch(e){}
     var r=await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents:runQuery?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
-      method:'POST',headers:hdrs,
-      body:JSON.stringify({structuredQuery:{from:[{collectionId:'studyComments'}],where:{fieldFilter:{field:{fieldPath:'studyId'},op:'EQUAL',value:{stringValue:studyId}}},orderBy:[{field:{fieldPath:'createdAt'},direction:'ASCENDING'}],limit:50}})
+      method:'POST',headers:_csHdrs,
+      body:JSON.stringify({structuredQuery:{from:[{collectionId:'studyComments'}],where:{fieldFilter:{field:{fieldPath:'studyId'},op:'EQUAL',value:{stringValue:studyId}}},limit:50}})
     });
     var raw=await r.json();
     var docs=(Array.isArray(raw)?raw:[]).filter(function(x){return x.document;}).map(function(x){return x.document;});
+    docs.sort(function(a,b){var ta=(a.fields&&a.fields.createdAt&&a.fields.createdAt.timestampValue)||'';var tb=(b.fields&&b.fields.createdAt&&b.fields.createdAt.timestampValue)||'';return ta.localeCompare(tb);});
     if(countEl) countEl.textContent=docs.length;
     if(!docs.length){listEl.innerHTML='<div style="font-size:11px;color:var(--text2);padding:4px 0">No comments yet.</div>';return;}
     var myUid=window._fb&&window._fb.user?window._fb.user.uid:'';
@@ -22674,9 +22714,1360 @@ async function csReportComment(commentId,authorId,authorName){
 // Patch commStudyOpen to call csStudyOpened
 (function(){
   var _o=window.commStudyOpen;
-  window.commStudyOpen=function(id){
-    if(_o) _o(id);
-    setTimeout(function(){csStudyOpened(id);},300);
+  window.commStudyOpen=function(idx){
+    if(_o) _o(idx);
+    setTimeout(function(){var s=typeof _commStudies!=='undefined'?_commStudies[idx]:null;if(s&&s.id)csStudyOpened(s.id);},350);
+  };
+})();
+</script>
+
+
+<script>
+/* ══ admRefreshUserInList — update displayed name without full reload ══ */
+function admRefreshUserInList(uid, newName){
+  // Update any displayed name in admin user rows immediately
+  document.querySelectorAll('.admin-user-row').forEach(function(row){
+    if(row.dataset.uid===uid||row.getAttribute('data-uid')===uid){
+      var nameDiv=row.querySelector('[style*="font-weight:700"]');
+      if(nameDiv){
+        // Replace first text node with new name
+        for(var n=nameDiv.firstChild;n;n=n.nextSibling){
+          if(n.nodeType===3&&n.textContent.trim()){
+            n.textContent=newName;
+            break;
+          }
+        }
+      }
+      // Update data-name attributes on buttons
+      row.querySelectorAll('[data-name]').forEach(function(btn){
+        btn.setAttribute('data-name',newName);
+      });
+      // Update search data
+      row.dataset.userSearch=(row.textContent||'').toLowerCase();
+    }
+  });
+  // Also update any displayed username in community lists
+  document.querySelectorAll('[data-uid="'+uid+'"] .user-name, [data-uid="'+uid+'"]').forEach(function(el){
+    if(el.textContent===el.textContent) {/* skip */}
+  });
+}
+</script>
+
+
+<script>
+/* ══ copyCCPgn ═══════════════════════════════════════════════════ */
+function copyCCPgn(idx){
+  var pgn=window._ccPgnCache&&window._ccPgnCache[idx];
+  if(!pgn){showToast('No PGN available.');return;}
+  navigator.clipboard?navigator.clipboard.writeText(pgn).then(function(){showToast('PGN copied!');})
+    :(function(){var t=document.createElement('textarea');t.value=pgn;document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);showToast('PGN copied!');})();
+}
+
+/* ══ loadCCRecentGames — fetch only last month ════════════════════ */
+function loadCCRecentGames(username){
+  if(!username){showToast('Enter a chess.com username first.');return;}
+  var el=document.getElementById('cc-games-list');if(!el)return;
+  el.innerHTML='<div class="spinner" style="margin:20px auto;display:block"></div>';
+  var cutoffTs=Date.now()-30*24*60*60*1000; // 30 days ago in ms
+  fetch('https://api.chess.com/pub/player/'+username+'/games/archives')
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var archives=d.archives||[];
+      if(!archives.length){el.innerHTML='<p style="color:var(--text2)">No games found.</p>';return;}
+      // Fetch last 2 months to cover the 30-day window
+      var recent=archives.slice(-2);
+      var fetches=recent.map(function(url){
+        return fetch(url).then(function(r){return r.json();}).catch(function(){return{games:[]};});
+      });
+      return Promise.all(fetches);
+    })
+    .then(function(results){
+      if(!results)return;
+      var allGames=[];
+      results.forEach(function(d){if(d&&d.games)allGames=allGames.concat(d.games);});
+      // Filter: end_time is Unix seconds, cutoffTs is ms
+      var cutoffSec=Math.floor(cutoffTs/1000);
+      var games=allGames.filter(function(g){return g.end_time&&g.end_time>=cutoffSec;});
+      games.sort(function(a,b){return (b.end_time||0)-(a.end_time||0)});
+      if(!games.length){el.innerHTML='<p style="color:var(--text2)">No games in the last 30 days.</p>';return;}
+      var u=username.toLowerCase();
+      window._ccPgnCache=window._ccPgnCache||[];
+      el.innerHTML='<h3 style="margin-bottom:6px">Recent Games — last 30 days ('+games.length+')</h3>'+
+        games.slice(0,60).map(function(g){
+          var isW=g.white&&g.white.username&&g.white.username.toLowerCase()===u;
+          var opp=(isW?(g.black&&g.black.username):(g.white&&g.white.username))||'?';
+          var myR=isW?(g.white&&g.white.rating):(g.black&&g.black.rating);
+          var wRes=g.white&&g.white.result, bRes=g.black&&g.black.result;
+          var res='Draw';
+          if(wRes==='win')res=isW?'Win':'Loss';
+          else if(bRes==='win')res=isW?'Loss':'Win';
+          var col=res==='Win'?'var(--green)':res==='Loss'?'var(--red)':'var(--text2)';
+          var tc=g.time_class?'['+g.time_class+']':'';
+          var dt=g.end_time?new Date(g.end_time*1000).toLocaleDateString():'';
+          var pgn=g.pgn||'';
+          var pgnIdx=window._ccPgnCache.push(pgn)-1;
+          return '<div class="op-game-row" style="display:flex;align-items:center;gap:4px">'
+            +'<div style="flex:1;display:flex;align-items:center;gap:4px;cursor:pointer;overflow:hidden" onclick="analyzeCCGameIdx('+pgnIdx+')">'
+            +'<span style="color:'+(isW?'#111':'#eee')+';background:'+(isW?'#ddd':'#555')+';border-radius:3px;padding:1px 5px;font-size:10px;font-weight:700;flex-shrink:0">'+(isW?'W':'B')+'</span>'
+            +'<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0 4px">vs '+esc(opp)+' '+tc+'</span>'
+            +'<span style="font-size:10px;color:var(--text2);margin-right:4px">'+dt+'</span>'
+            +'<span style="color:var(--text2);font-size:11px">'+(myR||'?')+'</span>'
+            +'<span style="color:'+col+';font-weight:700;font-size:11px;margin-left:3px">'+res+'</span>'
+            +'</div>'
+            +'<button onclick="event.stopPropagation();copyCCPgn('+pgnIdx+')" title="Copy PGN" style="background:none;border:1px solid var(--border);border-radius:4px;padding:2px 6px;cursor:pointer;font-size:10px;color:var(--text2);flex-shrink:0">&#128203;</button>'
+            +'</div>';
+        }).join('');
+    })
+    .catch(function(e){el.innerHTML='<p style="color:var(--red)">Error: '+e.message+'</p>';});
+}
+
+/* ══ admDeleteCommStudy
+
+/* ══ admDeleteCommStudy ═══════════════════════════════════════════ */
+async function admDeleteCommStudy(id, title){
+  if(!confirm('Delete community study "'+title+'"? This cannot be undone.')) return;
+  try{
+    var tok=await window._fb.user.getIdToken();
+    await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/communityStudies/'+id+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
+      method:'DELETE',headers:{'Authorization':'Bearer '+tok}
+    });
+    showToast('Study deleted.');
+    commStudyBack();
+    commStudyLoad();
+  }catch(e){showToast('Error: '+e.message);}
+}
+
+/* ══ Admin delete any comment ═════════════════════════════════════ */
+// artDeleteComment already exists — make it work for any admin
+// Patch the existing delete functions to check admin status too
+(function(){
+  var _origArt=window.artDeleteComment;
+  window.artDeleteComment=async function(articleId,commentId){
+    if(!window._fb||!window._fb.user){showToast('Not signed in.');return;}
+    if(!window._fb.isAdmin&&!(confirm&&true)){return;}
+    try{
+      var tok=await window._fb.user.getIdToken();
+      await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/articleComments/'+commentId+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
+        method:'DELETE',headers:{'Authorization':'Bearer '+tok}
+      });
+      showToast('Comment deleted.');
+      artLoadComments(articleId);
+    }catch(e){showToast('Error: '+e.message);}
+  };
+})();
+
+/* ══ opToggleSource — switch between built-in book and ChessDB ════ */
+window._opSource='builtin'; // 'builtin' or 'chessdb' — user can toggle
+function opToggleSource(){
+  window._opSource=window._opSource==='builtin'?'chessdb':'builtin';
+  var btn=document.getElementById('op-source-btn');
+  if(btn){
+    btn.textContent=window._opSource==='chessdb'?'&#128218; Switch to Built-in':'&#127760; Switch to ChessDB';
+    btn.style.color=window._opSource==='chessdb'?'var(--accent)':'var(--text2)';
+    btn.style.borderColor=window._opSource==='chessdb'?'var(--accent)':'var(--border)';
+  }
+  showToast(window._opSource==='chessdb'?'Switched to ChessDB Cloud':'Switched to built-in opening book');
+  // Re-fetch explorer data with new source
+  clearTimeout(window.opExplTimeout);
+  window.opExplTimeout=setTimeout(fetchOpExpl,100);
+}
+
+// Patch fetchOpExpl to use ChessDB when selected
+(function(){
+  var _orig=window.fetchOpExpl;
+  window.fetchOpExpl=async function(){
+    if(window._opSource!=='chessdb'){if(_orig)_orig();return;}
+    // Use ChessDB API
+    var el=document.getElementById('op-moves-list');
+    if(!el) return;
+    el.innerHTML='<div style="color:var(--text2);font-size:12px;padding:8px">⏳ Loading ChessDB…</div>';
+    try{
+      // Build FEN from current position
+      var fenStr=typeof fenFromGs==='function'&&typeof opGs!=='undefined'?fenFromGs(opGs):'';
+      if(!fenStr){el.innerHTML='<div style="color:var(--text2);font-size:12px">No position loaded.</div>';return;}
+      // ChessDB queryall endpoint
+      var url='https://www.chessdb.cn/cdb.php?action=queryall&board='+encodeURIComponent(fenStr)+'&json=1';
+      var r=await fetch(url);
+      var d=await r.json();
+      if(!d||!d.moves||!d.moves.length){
+        el.innerHTML='<div style="color:var(--text2);font-size:12px;padding:8px">No data in ChessDB for this position.</div>';return;
+      }
+      var moves=d.moves.slice(0,10);
+      el.innerHTML='<div style="font-size:11px;color:var(--text2);margin-bottom:6px">ChessDB: '+d.status+' &mdash; '+moves.length+' moves</div>'
+        +moves.map(function(m){
+          var score=m.score!==undefined?'<span style="color:var(--accent);margin-left:4px">'+m.score+'</span>':'';
+          var rank=m.rank!==undefined?'<span style="color:var(--text2);font-size:10px;margin-left:4px">#'+m.rank+'</span>':'';
+          return '<div style="padding:5px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;cursor:pointer" onclick="opPlayMove(\''+m.uci+'\')">'
+            +'<strong style="font-family:monospace;min-width:50px">'+m.san+'</strong>'
+            +'<div style="flex:1"><div class="op-bar" style="height:4px;background:var(--bg3);border-radius:2px"><div style="height:100%;background:var(--accent);border-radius:2px;width:'+Math.min(100,Math.round((m.winrate||50)))+'%"></div></div></div>'
+            +(m.winrate!==undefined?'<span style="font-size:10px;color:var(--text2)">'+m.winrate+'%</span>':'')
+            +score+rank
+            +'</div>';
+        }).join('');
+    }catch(e){
+      el.innerHTML='<div style="color:var(--text2);font-size:12px;padding:8px">ChessDB error: '+e.message+'</div>';
+    }
+  };
+
+  // opPlayMove: play UCI move on explorer board
+  window.opPlayMove=function(uci){
+    if(!uci||typeof opGs==='undefined'||typeof allLegal!=='function') return;
+    var legal=allLegal(opGs);
+    var fr=uci.charCodeAt(0)-97,fc=8-(parseInt(uci[1])),tr=uci.charCodeAt(2)-97,tc=8-(parseInt(uci[3]));
+    // Convert UCI to board coordinates
+    var mv=legal.find(function(m){return m.fc===fr&&m.fr===fc&&m.tc===tr&&m.tr===tc;});
+    if(!mv) return;
+    if(typeof handleOpClick==='function'){
+      opSel=[mv.fr,mv.fc]; opLegalSqs=[];
+      handleOpClick(mv.tr,mv.tc);
+    }
+  };
+})();
+</script>
+
+
+<script>
+/* ══ _admUpdateNameEverywhere — live name update across all UI ════════ */
+function _admUpdateNameEverywhere(uid, newName){
+  // 1. Update admin user list rows
+  document.querySelectorAll('[data-uid]').forEach(function(el){
+    if(el.dataset.uid!==uid) return;
+    // Update any data-name attributes (for buttons)
+    el.querySelectorAll('[data-name]').forEach(function(b){b.dataset.name=newName;});
+    // Update displayed name text in name elements
+    ['font-weight:700;font-size:13px','font-weight:700;font-size:14px'].forEach(function(style){
+      el.querySelectorAll('div').forEach(function(d){
+        if(d.getAttribute('style')&&d.getAttribute('style').includes('font-weight:700')&&d.textContent.trim()&&!d.children.length){
+          // Likely the name div - only update if it looks like a username
+          if(!d.textContent.includes('●')&&!d.textContent.includes('ELO')&&d.textContent.length<40){
+            // Check if this is the name display
+            if(el.querySelector('[data-uid="'+uid+'"]')||el.dataset.uid===uid){
+              d.textContent=newName;
+            }
+          }
+        }
+      });
+    });
+  });
+
+  // 2. Update any visible profile name element
+  var pn=document.getElementById('fb-profile-name');
+  if(pn && window._fb && window._fb.user && window._fb.user.uid===uid) pn.textContent=newName;
+
+  // 3. Update community study author names
+  document.querySelectorAll('#comm-study-grid .card').forEach(function(card){
+    // Author divs contain "by username" text
+    card.querySelectorAll('div').forEach(function(d){
+      if(d.textContent&&d.textContent.startsWith('by ')&&d.style.fontSize==='11px'){
+        // Can't easily match by UID here, but refresh will fix it
+      }
+    });
+  });
+
+  // 4. Store in sessionStorage so other parts of page can check
+  sessionStorage.setItem('c64_renamed_'+uid, newName);
+}
+
+/* ══ Opening flash toggle button ════════════════════════════════════ */
+window._showOpeningFlash=true;
+(function(){
+  // Patch showOpeningFlash to respect toggle
+  var _orig=window.showOpeningFlash;
+  window.showOpeningFlash=function(name,eco){
+    if(!window._showOpeningFlash) return; // suppressed
+    if(_orig) _orig(name,eco);
+  };
+})();
+
+function toggleOpeningFlash(){
+  window._showOpeningFlash=!window._showOpeningFlash;
+  var btn=document.getElementById('opening-flash-toggle-btn');
+  if(btn){
+    btn.textContent=window._showOpeningFlash?'🏷 Opening Tags: ON':'🏷 Opening Tags: OFF';
+    btn.style.color=window._showOpeningFlash?'var(--accent)':'var(--text2)';
+  }
+  showToast('Opening name tag '+(window._showOpeningFlash?'enabled':'disabled'));
+}
+
+/* ══ ChessDB: set default source and init toggle button UI ══════════ */
+(function(){
+  // Init toggle button to reflect default (ChessDB)
+  document.addEventListener('DOMContentLoaded',function(){
+    var btn=document.getElementById('op-source-btn');
+    if(btn){
+      btn.innerHTML=window._opSource==='chessdb'?'&#128218; Switch to Built-in':'&#127760; Switch to ChessDB';
+      btn.style.color=window._opSource==='chessdb'?'var(--accent)':'var(--text2)';
+      btn.style.borderColor=window._opSource==='chessdb'?'var(--accent)':'var(--border)';
+    }
+    // Also add opening flash toggle to board controls
+    var playCtrl=document.querySelector('#play-board')&&document.querySelector('#play-board').closest('.play-left');
+    if(playCtrl){
+      var bc=playCtrl.querySelector('.board-controls');
+      if(bc&&!document.getElementById('opening-flash-toggle-btn')){
+        var fb=document.createElement('button');
+        fb.id='opening-flash-toggle-btn';
+        fb.className='btn btn-ghost btn-sm';
+        fb.style.fontSize='11px';
+        fb.textContent='🏷 Opening Tags: ON';
+        fb.onclick=toggleOpeningFlash;
+        bc.appendChild(fb);
+      }
+    }
+  });
+})();
+</script>
+
+
+<!-- ═══════════════════════ TILTED? PAGE ═══════════════════════ -->
+<div class="page" id="page-tilted" style="display:none">
+  <div style="max-width:920px;margin:0 auto;padding:0 8px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap">
+      <div>
+        <h1 style="margin:0">🎮 Tilted?</h1>
+        <p style="color:var(--text2);font-size:13px;margin:2px 0 0">Play this game to relax, before continuing to play chess.</p>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="navTo('play')" style="margin-left:auto">♟ Back to Chess64</button>
+    </div>
+    <div id="tilted-disabled-msg" style="display:none;padding:32px;text-align:center;color:var(--text2)">
+      <div style="font-size:48px;margin-bottom:12px">🔒</div>
+      <div style="font-size:16px;font-weight:700">Tilted? is currently disabled by an administrator.</div>
+    </div>
+    <div id="tilted-game-wrap">
+      <!-- Scoped Mario styles -->
+      <style>
+        #tilted-game-wrap body { margin:0; }
+        #tilted-game-wrap canvas { image-rendering:auto; border:4px solid #0f172a; border-radius:12px; box-shadow:0 30px 60px -15px rgba(0,0,0,0.9); transition:box-shadow 0.3s; max-width:95%; max-height:80vh; }
+        #tilted-game-wrap #ui-layer { position:absolute; top:4%; width:850px; pointer-events:none; display:flex; justify-content:space-between; padding:0 40px; text-shadow:3px 3px 0px #000; font-weight:900; font-size:1.4rem; z-index:10; font-style:italic; }
+        #tilted-game-wrap .hud-box { background:rgba(0,0,0,0.5); padding:5px 15px; border-radius:8px; border:2px solid rgba(255,255,255,0.2); backdrop-filter:blur(4px); }
+        #tilted-game-wrap .overlay { position:absolute; background:rgba(2,6,23,0.95); padding:50px; border-radius:20px; text-align:center; display:none; z-index:100; border:4px solid #334155; min-width:400px; box-shadow:0 0 50px rgba(0,0,0,1); }
+        #tilted-game-wrap .level-card { position:absolute; top:40%; left:50%; transform:translate(-50%,-50%); background:linear-gradient(135deg,rgba(0,0,0,0.9),rgba(15,23,42,0.9)); color:white; padding:30px 60px; font-size:3.5rem; border-radius:16px; display:none; z-index:50; border:4px solid #fbbf24; pointer-events:none; text-shadow:4px 4px 0 #000; font-weight:900; font-style:italic; box-shadow:0 10px 30px rgba(0,0,0,0.8); }
+        #tilted-game-wrap .btn { background:#f8fafc; color:#0f172a; padding:14px 28px; border-radius:99px; font-weight:900; margin:10px; cursor:pointer; transition:all 0.2s; border:none; font-size:1.2rem; text-transform:uppercase; }
+        #tilted-game-wrap .btn:hover { transform:scale(1.08) translateY(-2px); background:#fbbf24; box-shadow:0 10px 20px rgba(251,191,36,0.4); }
+        #tilted-game-wrap .coin-text { color:#fcd34d; }
+      </style>
+      <div style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#020617;border-radius:16px;padding:20px;min-height:520px">
+        
+
+    <div id="ui-layer">
+        <div class="hud-box">SCORE: <span id="score" class="text-white">000000</span></div>
+        <div class="hud-box">COINS: <span id="coins" class="coin-text">0</span>/100</div>
+        <div class="hud-box">LIVES: <span id="lives" class="text-red-400">3</span></div>
+        <div class="hud-box" id="world-display">WORLD 1-1</div>
+    </div>
+
+    <div id="levelCard" class="level-card">WORLD 1-1</div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Death Menu -->
+    <div id="deathMenu" class="overlay">
+        <h2 id="menuTitle" class="text-5xl text-yellow-400 mb-4 font-black italic tracking-wider">OUT OF BOUNDS</h2>
+        <p id="menuSub" class="mb-8 text-2xl font-bold text-gray-300">Lives Remaining: 3</p>
+        <button id="respawnBtn" class="btn">RESTART LEVEL</button><br>
+        <button onclick="tiltedResetGame()" class="btn" style="background: #ef4444; color: white;">GIVE UP</button>
+    </div>
+
+    <!-- Game Over -->
+    <div id="gameOver" class="overlay">
+        <h2 class="text-7xl text-red-500 mb-4 font-black italic">GAME OVER</h2>
+        <p id="checkpointMsg" class="mb-8 text-xl font-bold text-gray-300">Lives depleted. Restarting from World Start.</p>
+        <button id="checkpointBtn" class="btn">RESTART WORLD</button><br>
+        <button onclick="tiltedResetGame()" class="btn">MAIN MENU</button>
+    </div>
+
+    <!-- Win Screen -->
+    <div id="winScreen" class="overlay">
+        <h2 class="text-7xl text-yellow-400 mb-4 font-black italic">ULTIMATE VICTORY</h2>
+        <p class="text-2xl mb-8 font-bold text-gray-200">You have conquered all 4 worlds!</p>
+        <button onclick="tiltedResetGame()" class="btn">PLAY AGAIN</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const GAME_WIDTH = 850;
+        const GAME_HEIGHT = 480;
+        canvas.width = GAME_WIDTH;
+        canvas.height = GAME_HEIGHT;
+
+        // Core Physics
+        const GRAVITY = 0.65;
+        const FRICTION = 0.82;
+        const JUMP_FORCE = -14.5;
+        
+        // Game State
+        let currentWorld = 1; // 1 to 4
+        let currentLevel = 1; // 1 to 7 (10 for W4)
+        let totalScore = 0;
+        let totalCoins = 0;
+        let lives = 3;
+        let isPaused = false;
+        let gameActive = true;
+        let camX = 0;
+        let screenShake = 0;
+        let comboMultiplier = 1;
+
+        const player = {
+            x: 100, y: 300, w: 26, h: 52,
+            velX: 0, velY: 0,
+            isGrounded: false,
+            facingRight: true,
+            walkCycle: 0,
+            hasBike: false, hasSpeed: false, hasFire: false,
+            speedTimer: 0, invuln: 0,
+            currentPlatVelX: 0, currentPlatVelY: 0
+        };
+
+        // Entity Arrays
+        let platforms = [];
+        let enemies = [];
+        let items = [];
+        let projectiles = [];
+        let particles = [];
+        let coins = [];
+        let spikes = [];
+        let springs = [];
+        let goal = null;
+        let boss = null;
+        
+        // Background Assets
+        let parallaxLayers = [];
+
+        const keys = {};
+        window.addEventListener('keydown', e => {
+            keys[e.code] = true;
+            if (e.code === 'KeyF' && player.hasFire && !isPaused) fireProjectile();
+        });
+        window.addEventListener('keyup', e => keys[e.code] = false);
+
+        document.getElementById('respawnBtn').addEventListener('click', respawn);
+        document.getElementById('checkpointBtn').addEventListener('click', () => {
+            lives = 3; currentLevel = 1; totalCoins = 0; comboMultiplier = 1;
+            document.getElementById('gameOver').style.display = 'none';
+            initLevel();
+        });
+
+        function fireProjectile() {
+            projectiles.push({
+                x: player.facingRight ? player.x + player.w : player.x - 10,
+                y: player.y + 20, w: 12, h: 12,
+                velX: player.facingRight ? 14 : -14,
+            });
+            spawnParticles(player.x + player.w/2, player.y + 20, '#f97316', 5, 4);
+        }
+
+        function spawnParticles(x, y, color, count, speedLimit, isExplosion=false) {
+            for(let i=0; i<count; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * speedLimit * 2,
+                    vy: (Math.random() - (isExplosion ? 0.5 : 1)) * speedLimit * 2,
+                    life: 1.0, decay: 0.02 + Math.random() * 0.03,
+                    color: color, size: 3 + Math.random() * 5
+                });
+            }
+        }
+
+        function pseudoRandom(seed) { let x = Math.sin(seed) * 10000; return x - Math.floor(x); }
+
+        function shakeScreen(intensity) { screenShake = intensity; }
+
+        function initBackgrounds() {
+            parallaxLayers = [];
+            let seed = currentWorld * 10 + currentLevel;
+            // Layer 1: Mountains/Hills
+            for(let i=0; i<15; i++) {
+                parallaxLayers.push({ type: 'mountain', x: i * 300 + pseudoRandom(seed+i)*100, y: 150 + pseudoRandom(seed*2+i)*100, w: 200+pseudoRandom(seed*3+i)*200, h: 300, depth: 0.2 });
+            }
+            // Layer 2: Trees/Details
+            for(let i=0; i<30; i++) {
+                parallaxLayers.push({ type: 'detail', x: i * 200 + pseudoRandom(seed+i*2)*150, y: 300 + pseudoRandom(seed*4+i)*50, w: 60+pseudoRandom(seed+i)*60, h: 150, depth: 0.5 });
+            }
+        }
+
+        // --- LEVEL GENERATOR ENGINE ---
+        function initLevel() {
+            isPaused = false;
+            comboMultiplier = 1;
+            const card = document.getElementById('levelCard');
+            card.innerText = `WORLD ${currentWorld}-${currentLevel}`;
+            card.style.display = 'block';
+            setTimeout(() => card.style.display = 'none', 1500);
+            
+            updateUI();
+
+            // Reset Player
+            player.x = 100; player.y = 300; player.velX = 0; player.velY = 0;
+            player.invuln = 100; player.currentPlatVelX = 0; player.currentPlatVelY = 0;
+            player.hasBike = false; player.hasFire = false; player.hasSpeed = false;
+            
+            // Clear Entities
+            platforms = []; enemies = []; items = []; projectiles = []; particles = []; 
+            coins = []; spikes = []; springs = []; boss = null; goal = null; camX = 0; screenShake = 0;
+            
+            initBackgrounds();
+
+            // Setup level generation parameters based on world & level
+            let seedValue = (currentWorld * 1000) + currentLevel;
+            const maxLevels = currentWorld === 4 ? 10 : 7;
+            const isBossLevel = currentLevel === maxLevels;
+            
+            // Default params
+            let prm = {
+                segments: 12 + (currentWorld * 3) + currentLevel,
+                gapMin: 80, gapMax: 180, platMin: 200, platMax: 500,
+                yVariance: 0, yVolatility: 0,
+                enemyChance: 0.3 + (currentWorld * 0.1),
+                coinChance: 0.5, spikeChance: 0, springChance: 0, movingChance: 0
+            };
+
+            // THEME OVERRIDES
+            if (currentWorld === 1) { // Plains - Standard intro
+                if (currentLevel === 1) { prm.gapMax = 120; prm.enemyChance = 0.2; } // 1-1 Intro
+                if (currentLevel === 2) { prm.yVariance = 120; prm.gapMin = 140; prm.platMax = 300; } // 1-2 Pipe Forest
+                if (currentLevel === 3) { prm.platMin = 600; prm.gapMax = 250; prm.enemyChance = 0.1; } // 1-3 Speed run
+                if (currentLevel === 4) { prm.gapMin = 200; prm.gapMax = 350; prm.yVariance = 50; } // 1-4 Bike trial
+                if (currentLevel === 5) { prm.enemyChance = 0.8; prm.platMin = 400; } // 1-5 Gauntlet
+                if (currentLevel === 6) { prm.movingChance = 0.3; } // 1-6 Moving plat intro
+            } 
+            else if (currentWorld === 2) { // Desert - Verticality & Springs
+                prm.yVariance = 150; prm.yVolatility = 0.5; prm.springChance = 0.3; prm.gapMin = 120;
+            }
+            else if (currentWorld === 3) { // Ice - Moving platforms & precise jumps
+                prm.movingChance = 0.6; prm.gapMin = 150; prm.gapMax = 250; prm.platMax = 300; prm.yVariance = 100;
+            }
+            else if (currentWorld === 4) { // Volcano - Spikes & Chaos
+                prm.spikeChance = 0.4; prm.movingChance = 0.4; prm.springChance = 0.2; prm.gapMin = 140; prm.enemyChance = 0.6;
+            }
+
+            // Start Platform
+            platforms.push({ x: -200, y: 420, w: 800, h: 80, type: 'ground', vx: 0, vy: 0 });
+            
+            let curX = 600;
+            let lastY = 420;
+
+            if (!isBossLevel) {
+                for (let i = 0; i < prm.segments; i++) {
+                    let r1 = pseudoRandom(seedValue + i);
+                    let r2 = pseudoRandom(seedValue * 1.5 + i);
+                    let r3 = pseudoRandom(seedValue * 2 + i);
+                    let r4 = pseudoRandom(seedValue * 3 + i);
+
+                    let segmentWidth = prm.platMin + r1 * (prm.platMax - prm.platMin);
+                    let gap = prm.gapMin + r2 * (prm.gapMax - prm.gapMin);
+                    
+                    // Height calculation
+                    let platformY = lastY;
+                    if (r3 < prm.yVolatility || prm.yVariance > 0) {
+                        let yChange = (r2 - 0.5) * 2 * prm.yVariance;
+                        platformY = Math.max(150, Math.min(420, lastY + yChange));
+                    }
+                    
+                    let isMoving = r4 < prm.movingChance;
+                    let pVx = 0, pVy = 0;
+                    if (isMoving) {
+                        if (r1 > 0.5) pVx = (r2 > 0.5 ? 1.5 : -1.5) * (1 + currentWorld*0.2);
+                        else pVy = (r3 > 0.5 ? 1.5 : -1.5) * (1 + currentWorld*0.2);
+                        segmentWidth = Math.max(100, segmentWidth * 0.6); // Smaller moving plats
+                    }
+
+                    let plat = { 
+                        x: curX, y: platformY, w: segmentWidth, h: 80, type: 'ground', 
+                        vx: pVx, vy: pVy, startX: curX, startY: platformY 
+                    };
+                    platforms.push(plat);
+                    
+                    // Populate Platform
+                    // Spikes
+                    if (r1 < prm.spikeChance && !isMoving && segmentWidth > 150) {
+                        spikes.push({ x: curX + segmentWidth/2 - 20, y: platformY - 20, w: 40, h: 20 });
+                    } 
+                    // Enemies
+                    else if (r2 < prm.enemyChance) {
+                        enemies.push({ 
+                            x: curX + segmentWidth/2, y: platformY - 40, w: 40, h: 40, 
+                            velX: -(2 + currentWorld*0.5 + r3*2), alive: true,
+                            type: currentWorld === 4 ? 'fire' : 'normal'
+                        });
+                    }
+
+                    // Springs
+                    if (r4 < prm.springChance && !isMoving) {
+                        springs.push({ x: curX + 40, y: platformY - 20, w: 40, h: 20 });
+                    }
+
+                    // Coins
+                    if (r3 < prm.coinChance) {
+                        let coinAmt = 3 + Math.floor(r1 * 3);
+                        for(let c=0; c<coinAmt; c++) {
+                            coins.push({ x: curX + 50 + c*40, y: platformY - 80 - (r2*50), w: 16, h: 24, collected: false });
+                        }
+                    }
+
+                    // Powerups (Guaranteed every 5th platform, or forced in 1-3/1-4)
+                    if (i % 5 === 4 || (currentWorld===1 && currentLevel===3 && i===1) || (currentWorld===1 && currentLevel===4 && i===1)) {
+                        let forceType = null;
+                        if(currentWorld===1 && currentLevel===3) forceType = 'speed';
+                        if(currentWorld===1 && currentLevel===4) forceType = 'bike';
+                        
+                        const types = ['bike', 'fire', 'speed'];
+                        let pType = forceType || types[Math.floor(r3 * 3)];
+                        platforms.push({ x: curX + segmentWidth/2 - 40, y: platformY - 140, w: 80, h: 30, type: 'item', content: pType, used: false, vx: 0, vy: 0 });
+                    }
+
+                    curX += segmentWidth + gap;
+                    lastY = platformY;
+                }
+
+                // Goal Flag
+                platforms.push({ x: curX, y: 420, w: 1000, h: 80, type: 'ground', vx: 0, vy: 0 });
+                goal = { x: curX + 200, y: 120, w: 40, h: 300, type: 'flag' };
+                
+            } else {
+                // Boss Arena
+                platforms.push({ x: curX, y: 420, w: 1800, h: 80, type: 'ground', vx: 0, vy: 0 });
+                let bossHP = currentWorld === 1 ? 10 : (currentWorld === 2 ? 15 : (currentWorld === 3 ? 20 : 30));
+                let bossSpeed = 4 + currentWorld * 1.2;
+                
+                boss = {
+                    x: curX + 800, y: 260, w: 70, h: 140, 
+                    health: bossHP, maxHealth: bossHP, 
+                    velX: -bossSpeed, velY: 0, speed: bossSpeed,
+                    jumpTimer: 0, active: true, facingRight: false, walkCycle: 0,
+                    isGrounded: false, invuln: 0, defeated: false
+                };
+            }
+        }
+
+        function respawn() {
+            if (lives <= 0) return;
+            document.getElementById('deathMenu').style.display = 'none';
+            initLevel(); // Total level reset on death for fairness
+        }
+
+        function handleDamage(isFall = false) {
+            if (player.invuln > 0 && !isFall) return;
+
+            if (!isFall && (player.hasBike || player.hasFire || player.hasSpeed)) {
+                player.hasBike = player.hasFire = player.hasSpeed = false;
+                player.invuln = 120;
+                player.velY = -10;
+                player.velX = player.facingRight ? -5 : 5;
+                shakeScreen(8);
+                spawnParticles(player.x+13, player.y+26, '#fff', 15, 6, true);
+                return;
+            }
+
+            lives--;
+            updateUI();
+            isPaused = true;
+            shakeScreen(15);
+            
+            if (lives <= 0) {
+                document.getElementById('checkpointMsg').innerText = `World ${currentWorld} progress saved. Restarting at Level ${currentWorld}-1.`;
+                document.getElementById('gameOver').style.display = 'block';
+            } else {
+                document.getElementById('menuTitle').innerText = isFall ? "OUT OF BOUNDS" : "WASTED";
+                document.getElementById('menuSub').innerText = `Lives Remaining: ${lives}`;
+                document.getElementById('deathMenu').style.display = 'block';
+            }
+        }
+
+        function update() {
+            if (isPaused || !gameActive) {
+                render(); requestAnimationFrame(update); return;
+            }
+
+            // Screen Shake Decay
+            if (screenShake > 0) screenShake *= 0.9;
+            if (screenShake < 0.5) screenShake = 0;
+
+            // Player Physics & Input
+            let accel = player.hasBike ? 1.3 : (player.hasSpeed ? 1.8 : 0.9);
+            let maxSpd = player.hasBike ? 12 : (player.hasSpeed ? 16 : 7);
+
+            if (keys['ArrowRight'] || keys['KeyD']) { player.velX += accel; player.facingRight = true; }
+            else if (keys['ArrowLeft'] || keys['KeyA']) { player.velX -= accel; player.facingRight = false; }
+            else { player.velX *= FRICTION; }
+
+            player.velX = Math.max(-maxSpd, Math.min(player.velX, maxSpd));
+            player.velY += GRAVITY;
+
+            if ((keys['Space'] || keys['ArrowUp'] || keys['KeyW']) && player.isGrounded) {
+                player.velY = JUMP_FORCE;
+                player.isGrounded = false;
+                spawnParticles(player.x+13, player.y+52, '#a1a1aa', 8, 2);
+            }
+
+            // Apply movement + moving platform momentum
+            player.x += player.velX + player.currentPlatVelX;
+            player.y += player.velY + player.currentPlatVelY;
+            
+            if (player.invuln > 0) player.invuln--;
+            if (player.hasSpeed) {
+                player.speedTimer--;
+                if(player.speedTimer % 5 === 0) spawnParticles(player.x+13, player.y+26, '#06b6d4', 2, 1);
+                if (player.speedTimer <= 0) player.hasSpeed = false;
+            }
+
+            if (player.isGrounded && Math.abs(player.velX) > 0.5) player.walkCycle += Math.abs(player.velX) * 0.15;
+            else if (!player.isGrounded) player.walkCycle = 0.8; 
+            else player.walkCycle = 0;
+
+            if (player.y > GAME_HEIGHT + 200) handleDamage(true); // Fall death
+
+            // Particles Update
+            for(let i=particles.length-1; i>=0; i--) {
+                let p = particles[i];
+                p.x += p.vx; p.y += p.vy; p.life -= p.decay;
+                if(p.life <= 0) particles.splice(i, 1);
+            }
+
+            // Projectiles Update
+            for(let i=projectiles.length-1; i>=0; i--) {
+                let p = projectiles[i];
+                p.x += p.velX;
+                spawnParticles(p.x+6, p.y+6, '#f97316', 1, 1);
+                
+                // Boss Hit
+                if (boss && boss.active && checkRect(p, boss) && boss.invuln <= 0) {
+                    boss.health--; boss.invuln = 20; projectiles.splice(i, 1);
+                    shakeScreen(10);
+                    spawnParticles(boss.x+35, boss.y+70, '#ef4444', 20, 8, true);
+                    if (boss.health <= 0) defeatBoss();
+                    continue;
+                }
+                // Enemy Hit
+                let hitEnemy = false;
+                for(let j=0; j<enemies.length; j++) {
+                    let e = enemies[j];
+                    if (e.alive && checkRect(p, e)) { 
+                        e.alive = false; projectiles.splice(i, 1); 
+                        totalScore += 500; updateUI(); hitEnemy = true;
+                        spawnParticles(e.x+20, e.y+20, '#ef4444', 15, 5, true);
+                        break; 
+                    }
+                }
+                if(hitEnemy) continue;
+                if (Math.abs(p.x - player.x) > 1000) projectiles.splice(i, 1);
+            }
+
+            // Collisions & Moving Platforms
+            player.isGrounded = false;
+            player.currentPlatVelX = 0; player.currentPlatVelY = 0;
+
+            platforms.forEach(p => {
+                // Move platforms
+                if (p.vx !== 0 || p.vy !== 0) {
+                    p.x += p.vx; p.y += p.vy;
+                    if (Math.abs(p.x - p.startX) > 150) p.vx *= -1;
+                    if (Math.abs(p.y - p.startY) > 150) p.vy *= -1;
+                }
+
+                if (checkRect(player, p)) {
+                    let side = resolveCollision(player, p);
+                    if (side === 'top') {
+                        player.currentPlatVelX = p.vx;
+                        player.currentPlatVelY = p.vy;
+                        comboMultiplier = 1; // Reset combo on ground
+                    }
+                    if (side === 'bottom' && p.type === 'item' && !p.used) {
+                        p.used = true;
+                        items.push({ x: p.x + p.w/2 - 20, y: p.y - 60, w: 40, h: 40, type: p.content, velY: -12 });
+                        spawnParticles(p.x+p.w/2, p.y, '#fbbf24', 10, 4);
+                    }
+                }
+            });
+
+            // Springs
+            springs.forEach(s => {
+                if (checkRect(player, s) && player.velY > 0 && player.y + player.h < s.y + s.h) {
+                    player.velY = -24; // Super jump
+                    player.isGrounded = false;
+                    player.y = s.y - player.h;
+                    comboMultiplier = 1;
+                    spawnParticles(s.x+20, s.y, '#a855f7', 15, 6);
+                }
+            });
+
+            // Spikes
+            spikes.forEach(s => {
+                if (checkRect(player, s)) handleDamage();
+            });
+
+            // Coins
+            for(let i=coins.length-1; i>=0; i--) {
+                let c = coins[i];
+                if (!c.collected && checkRect(player, c)) {
+                    c.collected = true;
+                    totalCoins++;
+                    totalScore += 100;
+                    spawnParticles(c.x+8, c.y+12, '#fcd34d', 8, 3);
+                    if (totalCoins >= 100) {
+                        totalCoins -= 100;
+                        lives++;
+                        spawnParticles(player.x+13, player.y, '#10b981', 30, 8, true); // 1-Up effect
+                    }
+                    updateUI();
+                }
+            }
+
+            // Items (Powerups)
+            for(let i=items.length-1; i>=0; i--) {
+                let it = items[i];
+                it.velY += GRAVITY; it.y += it.velY;
+                if (it.y > 480) { items.splice(i, 1); continue; } // fell off
+                
+                // Keep item on platform if it lands
+                platforms.forEach(p => { if(p.type === 'ground' && checkRect(it, p)) { it.y = p.y - it.h; it.velY = 0; } });
+
+                if (checkRect(player, it)) {
+                    if(it.type === 'bike') player.hasBike = true;
+                    if(it.type === 'speed') { player.hasSpeed = true; player.speedTimer = 800; }
+                    if(it.type === 'fire') player.hasFire = true;
+                    totalScore += 1000; updateUI();
+                    spawnParticles(it.x+20, it.y+20, '#fff', 20, 6, true);
+                    items.splice(i, 1);
+                }
+            }
+
+            // Enemies
+            enemies.forEach(e => {
+                if (!e.alive) return;
+                e.x += e.velX;
+                if (checkRect(player, e)) {
+                    // Stomp logic
+                    if (player.velY > 0 && player.y + player.h - player.velY < e.y + 15) { 
+                        e.alive = false; 
+                        player.velY = -14; // bounce
+                        let pts = 200 * comboMultiplier;
+                        totalScore += pts;
+                        comboMultiplier++;
+                        updateUI();
+                        spawnParticles(e.x+20, e.y+20, '#ef4444', 15, 5, true);
+                    }
+                    else { handleDamage(); }
+                }
+            });
+
+            // Boss Logic
+            if (boss && boss.active) {
+                boss.x += boss.velX;
+                boss.velY += GRAVITY; boss.y += boss.velY;
+                if (boss.invuln > 0) boss.invuln--;
+                
+                // Floor collision
+                if (boss.y > 280) { boss.y = 280; boss.velY = 0; boss.isGrounded = true; }
+                
+                boss.jumpTimer++;
+                // Boss jump pattern scales with world
+                let jumpThreshold = 50 - (currentWorld * 5); 
+                if (boss.jumpTimer > jumpThreshold && boss.isGrounded) { 
+                    boss.velY = -15 - (currentWorld); boss.jumpTimer = 0; 
+                    boss.velX = (player.x < boss.x) ? -boss.speed : boss.speed; 
+                    shakeScreen(5);
+                }
+
+                if (checkRect(player, boss) && boss.invuln <= 0) {
+                    if (player.velY > 0 && player.y + player.h - player.velY < boss.y + 40) {
+                        boss.health--; boss.invuln = 40; player.velY = -18; totalScore += 2500; updateUI();
+                        shakeScreen(15);
+                        spawnParticles(boss.x+35, boss.y, '#fbbf24', 30, 10, true);
+                        if (boss.health <= 0) defeatBoss();
+                    } else { handleDamage(); }
+                }
+            }
+
+            // Level Completion
+            if (goal && checkRect(player, goal)) nextLevel();
+
+            render();
+            requestAnimationFrame(update);
+        }
+
+        function defeatBoss() {
+            boss.active = false; boss.defeated = true;
+            goal = { x: boss.x + 400, y: 120, w: 40, h: 300, type: 'flag' };
+            totalScore += 25000 * currentWorld;
+            updateUI();
+            shakeScreen(30);
+            for(let i=0; i<5; i++) setTimeout(() => spawnParticles(boss.x+35 + (Math.random()*100-50), boss.y+70 + (Math.random()*100-50), '#ef4444', 40, 15, true), i*200);
+        }
+
+        function nextLevel() {
+            let maxForWorld = currentWorld === 4 ? 10 : 7;
+            if (currentLevel < maxForWorld) {
+                currentLevel++;
+            } else {
+                if (currentWorld < 4) {
+                    currentWorld++;
+                    currentLevel = 1;
+                    lives = 3; // Refresh lives per world
+                } else {
+                    gameActive = false;
+                    document.getElementById('winScreen').style.display = 'block';
+                    return;
+                }
+            }
+            initLevel();
+        }
+
+        function checkRect(a, b) { return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
+
+        function resolveCollision(usr, obj) {
+            let ox = (usr.x + usr.w/2) - (obj.x + obj.w/2);
+            let oy = (usr.y + usr.h/2) - (obj.y + obj.h/2);
+            let h_w = (usr.w + obj.w)/2, h_h = (usr.h + obj.h)/2;
+            if (Math.abs(ox) < h_w && Math.abs(oy) < h_h) {
+                let dx = h_w - Math.abs(ox), dy = h_h - Math.abs(oy);
+                if (dx >= dy) {
+                    if (oy > 0) { usr.y += dy; usr.velY = 0; return 'bottom'; }
+                    else { usr.y -= dy; usr.velY = 0; usr.isGrounded = true; return 'top'; }
+                } else {
+                    if (ox > 0) usr.x += dx; else usr.x -= dx;
+                    usr.velX = 0; return 'side';
+                }
+            }
+            return null;
+        }
+
+        function updateUI() {
+            document.getElementById('score').innerText = totalScore.toString().padStart(6, '0');
+            document.getElementById('coins').innerText = totalCoins.toString();
+            document.getElementById('lives').innerText = lives;
+        }
+
+        // --- GRAPHICS RENDERING ---
+        
+        // Exact preserved player drawing function as requested
+        function drawPersona(ctx, x, y, p, isBoss = false) {
+            ctx.save();
+            ctx.translate(x + p.w / 2, y + p.h);
+            const scale = isBoss ? 2.8 : 1;
+            ctx.scale(scale, scale);
+            if (!p.facingRight) ctx.scale(-1, 1);
+            if (p.invuln > 0 && Math.floor(Date.now()/40) % 2 === 0) ctx.globalAlpha = 0.3;
+            
+            const walk = Math.sin(p.walkCycle), walkAlt = Math.sin(p.walkCycle + Math.PI);
+            
+            if (!isBoss) {
+                if (p.hasSpeed) { ctx.shadowBlur = 15; ctx.shadowColor = 'cyan'; }
+                if (p.hasFire) { ctx.shadowBlur = 10; ctx.shadowColor = 'orange'; }
+                if (p.hasBike) {
+                    ctx.fillStyle = '#1e293b'; ctx.beginPath(); ctx.arc(-20, -10, 10, 0, Math.PI*2); ctx.arc(20, -10, 10, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = '#ef4444'; ctx.fillRect(-24, -22, 48, 8); ctx.translate(0, -22);
+                }
+            }
+
+            const shirtColor = isBoss ? (currentWorld === 4 ? '#000' : '#4c1d95') : (p.hasFire ? '#f97316' : '#ef4444');
+            const pantsColor = isBoss ? '#1e1b4b' : (p.hasFire ? '#ffffff' : '#3b82f6');
+            const skinColor = isBoss ? '#7c3aed' : '#ffdbac';
+
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(walk * 12, -2); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(walkAlt * 12, -2); ctx.stroke();
+            ctx.fillStyle = shirtColor; ctx.fillRect(-10, -38, 20, 18);
+            ctx.fillStyle = pantsColor; ctx.fillRect(-10, -25, 20, 8);
+            ctx.beginPath(); ctx.moveTo(0, -34); ctx.lineTo(walkAlt * 10, -22); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, -34); ctx.lineTo(walk * 10, -22); ctx.stroke();
+            ctx.fillStyle = skinColor; ctx.beginPath(); ctx.arc(2, -45, 9, 0, Math.PI*2); ctx.fill();
+            if(isBoss) { ctx.fillStyle = 'red'; ctx.fillRect(4, -48, 3, 3); ctx.fillRect(8, -48, 3, 3); }
+            else { ctx.fillStyle = shirtColor; ctx.beginPath(); ctx.arc(2, -49, 8, Math.PI, 0); ctx.fill(); ctx.fillRect(-6, -50, 16, 3); }
+            ctx.restore();
+        }
+
+        function render() {
+            // World Gradients
+            let bgGradients = {
+                1: ['#38bdf8', '#bae6fd'], // Plains
+                2: ['#f59e0b', '#fde68a'], // Desert
+                3: ['#0f172a', '#1e3a8a'], // Ice/Night
+                4: ['#450a0a', '#000000']  // Volcano
+            };
+            
+            let grad = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
+            grad.addColorStop(0, bgGradients[currentWorld][0]);
+            grad.addColorStop(1, bgGradients[currentWorld][1]);
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Screen Shake Offset
+            let sx = (Math.random() - 0.5) * screenShake;
+            let sy = (Math.random() - 0.5) * screenShake;
+
+            // Camera Setup
+            camX = Math.min(0, -player.x + GAME_WIDTH/3);
+            
+            ctx.save(); 
+            ctx.translate(sx, sy);
+
+            // Draw Parallax Backgrounds
+            parallaxLayers.forEach(l => {
+                ctx.save();
+                ctx.translate(camX * l.depth, 0);
+                
+                if (currentWorld === 1) { // Plains
+                    ctx.fillStyle = l.type === 'mountain' ? 'rgba(255,255,255,0.4)' : 'rgba(34, 197, 94, 0.3)';
+                    if(l.type === 'mountain') { ctx.beginPath(); ctx.moveTo(l.x, l.y+l.h); ctx.lineTo(l.x+l.w/2, l.y); ctx.lineTo(l.x+l.w, l.y+l.h); ctx.fill(); }
+                    else { ctx.beginPath(); ctx.arc(l.x+l.w/2, l.y, l.w/2, 0, Math.PI, true); ctx.fill(); }
+                } 
+                else if (currentWorld === 2) { // Desert
+                    ctx.fillStyle = l.type === 'mountain' ? 'rgba(217, 119, 6, 0.4)' : 'rgba(251, 191, 36, 0.3)';
+                    ctx.beginPath(); ctx.moveTo(l.x, l.y+l.h); ctx.lineTo(l.x+l.w/2, l.y); ctx.lineTo(l.x+l.w, l.y+l.h); ctx.fill();
+                }
+                else if (currentWorld === 3) { // Ice
+                    ctx.fillStyle = l.type === 'mountain' ? 'rgba(148, 163, 184, 0.3)' : 'rgba(226, 232, 240, 0.4)';
+                    ctx.beginPath(); ctx.moveTo(l.x, l.y+l.h); ctx.lineTo(l.x+l.w/2, l.y); ctx.lineTo(l.x+l.w, l.y+l.h); ctx.fill();
+                    // snow caps
+                    if(l.type === 'mountain') { ctx.fillStyle='rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.moveTo(l.x+l.w*0.35, l.y+l.h*0.3); ctx.lineTo(l.x+l.w/2, l.y); ctx.lineTo(l.x+l.w*0.65, l.y+l.h*0.3); ctx.lineTo(l.x+l.w*0.5, l.y+l.h*0.4); ctx.fill();}
+                }
+                else if (currentWorld === 4) { // Volcano
+                    ctx.fillStyle = l.type === 'mountain' ? 'rgba(127, 29, 29, 0.5)' : 'rgba(185, 28, 28, 0.3)';
+                    ctx.beginPath(); ctx.moveTo(l.x, l.y+l.h); ctx.lineTo(l.x+l.w/2, l.y); ctx.lineTo(l.x+l.w, l.y+l.h); ctx.fill();
+                    if(l.type==='mountain') { ctx.fillStyle='rgba(220, 38, 38, 0.8)'; ctx.fillRect(l.x+l.w/2-5, l.y-20, 10, 40); } // Lava spout
+                }
+                ctx.restore();
+            });
+
+            // Apply main camera translation for gameplay elements
+            ctx.save(); ctx.translate(camX, 0);
+            
+            // Draw Platforms
+            platforms.forEach(p => {
+                if (p.type === 'ground') { 
+                    // Base Colors
+                    let groundColor = currentWorld === 1 ? '#065f46' : (currentWorld === 2 ? '#78350f' : (currentWorld === 3 ? '#1e293b' : '#27080a'));
+                    let topColor = currentWorld === 1 ? '#10b981' : (currentWorld === 2 ? '#fbbf24' : (currentWorld === 3 ? '#e2e8f0' : '#b91c1c'));
+                    
+                    // Shadow
+                    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                    ctx.fillRect(p.x+5, p.y+5, p.w, p.h);
+
+                    // Body
+                    ctx.fillStyle = groundColor;
+                    ctx.fillRect(p.x, p.y, p.w, p.h); 
+                    
+                    // Texture overlay (simple dots)
+                    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+                    for(let tx=0; tx<p.w; tx+=20) {
+                        for(let ty=15; ty<p.h; ty+=15) {
+                            if((tx+ty)%3===0) ctx.fillRect(p.x+tx, p.y+ty, 4, 4);
+                        }
+                    }
+
+                    // Top layer
+                    ctx.fillStyle = topColor;
+                    ctx.fillRect(p.x, p.y, p.w, 14); 
+                    
+                    // Glow for lava world
+                    if(currentWorld === 4 && p.y >= 420) {
+                        ctx.shadowBlur = 20; ctx.shadowColor = 'red';
+                        ctx.fillStyle = '#dc2626'; ctx.fillRect(p.x, p.y+p.h-10, p.w, 10);
+                        ctx.shadowBlur = 0;
+                    }
+                }
+                else if (p.type === 'item') { 
+                    ctx.fillStyle = p.used ? '#334155' : '#fbbf24'; 
+                    ctx.fillRect(p.x, p.y, p.w, p.h);
+                    ctx.strokeStyle = '#000'; ctx.lineWidth=2; ctx.strokeRect(p.x, p.y, p.w, p.h);
+                    if (!p.used) { ctx.fillStyle = 'white'; ctx.font = '900 24px system-ui'; ctx.fillText('?', p.x+p.w/2-8, p.y+24); } 
+                }
+            });
+
+            // Draw Spikes
+            ctx.fillStyle = '#94a3b8';
+            spikes.forEach(s => {
+                ctx.beginPath();
+                ctx.moveTo(s.x, s.y+s.h); ctx.lineTo(s.x+s.w/4, s.y); ctx.lineTo(s.x+s.w/2, s.y+s.h);
+                ctx.moveTo(s.x+s.w/2, s.y+s.h); ctx.lineTo(s.x+(s.w/4)*3, s.y); ctx.lineTo(s.x+s.w, s.y+s.h);
+                ctx.fill(); ctx.stroke();
+            });
+
+            // Draw Springs
+            ctx.fillStyle = '#cbd5e1';
+            springs.forEach(s => {
+                ctx.fillRect(s.x, s.y+s.h-5, s.w, 5); // base
+                ctx.fillStyle = '#a855f7';
+                ctx.fillRect(s.x+5, s.y+5, s.w-10, s.h-10); // coil
+                ctx.fillStyle = '#f8fafc';
+                ctx.fillRect(s.x, s.y, s.w, 5); // top pad
+            });
+
+            // Draw Goal
+            if (goal) { 
+                ctx.fillStyle = '#94a3b8'; ctx.fillRect(goal.x, goal.y, 8, goal.h); // Pole
+                ctx.fillStyle = '#eab308'; ctx.beginPath(); ctx.arc(goal.x+4, goal.y, 8, 0, Math.PI*2); ctx.fill(); // Ball
+                ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.moveTo(goal.x+8, goal.y+10); ctx.lineTo(goal.x+70, goal.y+40); ctx.lineTo(goal.x+8, goal.y+70); ctx.fill(); // Flag
+            }
+
+            // Draw Coins
+            let t = Date.now() / 150;
+            coins.forEach(c => {
+                if(!c.collected) {
+                    ctx.fillStyle = '#fbbf24';
+                    ctx.beginPath();
+                    let stretch = Math.sin(t + c.x);
+                    ctx.ellipse(c.x+c.w/2, c.y+c.h/2, Math.max(2, c.w/2 * Math.abs(stretch)), c.h/2, 0, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#d97706'; ctx.lineWidth = 2; ctx.stroke();
+                }
+            });
+
+            // Draw Projectiles
+            projectiles.forEach(p => { 
+                ctx.fillStyle = '#f97316'; ctx.shadowBlur = 10; ctx.shadowColor = 'yellow';
+                ctx.beginPath(); ctx.arc(p.x+6, p.y+6, 6, 0, Math.PI*2); ctx.fill(); 
+                ctx.shadowBlur = 0;
+            });
+            
+            // Draw Enemies
+            enemies.forEach(e => { 
+                if (!e.alive) return; 
+                ctx.fillStyle = e.type === 'fire' ? '#dc2626' : (currentWorld === 3 ? '#1e3a8a' : '#7f1d1d'); 
+                
+                // Body bounce
+                let eY = e.y + Math.abs(Math.sin(Date.now()/150 + e.x))*5;
+
+                ctx.beginPath(); ctx.ellipse(e.x+20, eY+20, 20, 18, 0, 0, Math.PI*2); ctx.fill(); 
+                // Eyes
+                ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(e.x+10, eY+15, 5, 0, Math.PI*2); ctx.arc(e.x+26, eY+15, 5, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = 'black'; ctx.beginPath(); ctx.arc(e.x+8+(e.velX<0?0:4), eY+15, 2, 0, Math.PI*2); ctx.arc(e.x+24+(e.velX<0?0:4), eY+15, 2, 0, Math.PI*2); ctx.fill();
+                // Feet
+                ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(e.x+10, eY+38, 6, Math.PI, 0); ctx.arc(e.x+30, eY+38, 6, Math.PI, 0); ctx.fill();
+            });
+
+            // Draw Items
+            items.forEach(it => {
+                ctx.fillStyle = it.type === 'bike' ? '#ef4444' : (it.type === 'fire' ? '#f97316' : '#22d3ee');
+                ctx.beginPath(); ctx.arc(it.x+20, it.y+20, 15, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(it.x+20, it.y+20, 6, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = 'black'; ctx.font='bold 12px sans-serif'; ctx.fillText(it.type[0].toUpperCase(), it.x+16, it.y+24);
+            });
+
+            // Draw Particles
+            particles.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = Math.max(0, p.life);
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
+                ctx.globalAlpha = 1.0;
+            });
+
+            // Draw Boss
+            if (boss && boss.active) {
+                drawPersona(ctx, boss.x, boss.y, boss, true);
+                // Health bar
+                ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(boss.x-40, boss.y-70, 150, 16);
+                ctx.fillStyle = '#ef4444'; ctx.fillRect(boss.x-38, boss.y-68, (boss.health/boss.maxHealth)*146, 12);
+                ctx.strokeStyle = 'white'; ctx.lineWidth=2; ctx.strokeRect(boss.x-40, boss.y-70, 150, 16);
+            }
+
+            // Draw Player
+            drawPersona(ctx, player.x, player.y, player);
+            
+            ctx.restore(); // Undo camera
+            ctx.restore(); // Undo screen shake
+        }
+
+        initLevel();
+        update();
+    </script>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ══ Tilted? page integration ══════════════════════════════════════ */
+
+// Check if Tilted? is disabled by admin
+(function(){
+  var _o=window.navTo;
+  window.navTo=function(page){
+    if(_o) _o(page);
+    if(page==='tilted'){
+      // Check admin setting from siteSettings
+      var wrap=document.getElementById('tilted-game-wrap');
+      var dis=document.getElementById('tilted-disabled-msg');
+      fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/siteSettings/tilted?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q')
+        .then(function(r){return r.json();})
+        .then(function(d){
+          var disabled=(d.fields&&d.fields.disabled&&d.fields.disabled.booleanValue)===true;
+          if(wrap) wrap.style.display=disabled?'none':'block';
+          if(dis) dis.style.display=disabled?'block':'none';
+          if(!disabled) tiltedInit();
+        }).catch(function(){
+          if(wrap) wrap.style.display='block';
+          tiltedInit();
+        });
+    }
+  };
+})();
+
+var _tiltedInited=false;
+function tiltedInit(){
+  if(_tiltedInited) return;
+  _tiltedInited=true;
+  // The Mario game auto-starts via initLevel(); update() at end of its script
+}
+
+function tiltedResetGame(){
+  // Reset the game by reinitializing
+  if(typeof initLevel==='function') initLevel();
+}
+
+/* ══ Admin toggle for Tilted? page ══════════════════════════════════ */
+async function admToggleTilted(){
+  if(!window._fb||!window._fb.user) return;
+  var btn=document.getElementById('adm-tilted-toggle-btn');
+  try{
+    var tok=await window._fb.user.getIdToken();
+    // Check current state
+    var r=await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/siteSettings/tilted?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{headers:{'Authorization':'Bearer '+tok}});
+    var d=await r.json();
+    var cur=(d.fields&&d.fields.disabled&&d.fields.disabled.booleanValue)===true;
+    var newVal=!cur;
+    await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/siteSettings/tilted?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=disabled',{
+      method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+      body:JSON.stringify({fields:{disabled:{booleanValue:newVal}}})
+    });
+    if(btn) btn.textContent=newVal?'🎮 Enable Tilted? for users':'🔒 Disable Tilted? for users';
+    showToast('Tilted? '+(newVal?'disabled':'enabled')+' for all users.');
+  }catch(e){showToast('Error: '+e.message);}
+}
+
+// Inject admin Tilted? toggle into admin panel
+(function(){
+  var _check=setInterval(function(){
+    var analytics=document.getElementById('adm-tab-analytics');
+    if(!analytics) return;
+    clearInterval(_check);
+    // Add to misc admin section - check if button already added
+    if(document.getElementById('adm-tilted-toggle-btn')) return;
+    var btn=document.createElement('button');
+    btn.id='adm-tilted-toggle-btn';
+    btn.className='btn btn-ghost btn-sm';
+    btn.style.cssText='font-size:12px;margin:4px';
+    btn.textContent='🔒 Disable Tilted? for users';
+    btn.onclick=admToggleTilted;
+    // Load current state
+    fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/siteSettings/tilted?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q')
+      .then(function(r){return r.json();})
+      .then(function(d){
+        var dis=(d.fields&&d.fields.disabled&&d.fields.disabled.booleanValue)===true;
+        btn.textContent=dis?'🎮 Enable Tilted? for users':'🔒 Disable Tilted? for users';
+      });
+    // Find admin analytics tab content area
+    var analyticsContent=document.getElementById('adm-content-analytics')||document.querySelector('#adm-analytics-content');
+    if(analyticsContent) analyticsContent.insertBefore(btn, analyticsContent.firstChild);
+    else document.querySelector('[id^="adm-tab"]')?.parentElement?.appendChild(btn);
+  },500);
+})();
+
+/* ══ Parental controls — also block "tilted" page ════════════════════ */
+(function(){
+  var _PARENTAL_PAGES_orig=window._PARENTAL_PAGES;
+  // Wait for parental to load then add tilted
+  var _pc=setInterval(function(){
+    if(typeof _PARENTAL_PAGES==='undefined') return;
+    clearInterval(_pc);
+    if(!_PARENTAL_PAGES.includes('tilted')) _PARENTAL_PAGES.push('tilted');
+  },200);
+})();
+
+/* ══ Local Parental Controls (device-level, SHA-256) ════════════════ */
+// This locks the device regardless of which account is logged in.
+// It uses localStorage (not Firebase) so it works offline and on any account.
+// Uses SHA-256 hashing of a PIN for security.
+
+var _localParentalKey='c64_local_parental';
+var _localParentalBlocked=['tilted','chat','forums']; // pages blocked by default when local parental is on
+
+async function sha256(str){
+  var buf=new TextEncoder().encode(str);
+  var hash=await crypto.subtle.digest('SHA-256',buf);
+  return Array.from(new Uint8Array(hash)).map(function(b){return b.toString(16).padStart(2,'0');}).join('');
+}
+
+function localParentalGetState(){
+  try{ return JSON.parse(localStorage.getItem(_localParentalKey)||'{}'); }catch(e){return {};}
+}
+function localParentalSaveState(s){ localStorage.setItem(_localParentalKey,JSON.stringify(s)); }
+
+async function localParentalEnable(){
+  var pin=prompt('Set a local parental control PIN (4-8 digits). This will lock this device regardless of which account is signed in.');
+  if(!pin||pin.length<4||pin.length>8||!/^\d+$/.test(pin)){
+    showToast('PIN must be 4-8 digits.');return;
+  }
+  var pin2=prompt('Confirm your PIN:');
+  if(pin!==pin2){showToast('PINs do not match.');return;}
+  var hash=await sha256(pin);
+  localParentalSaveState({enabled:true,hash:hash,blocked:{tilted:true,chat:true,forums:true}});
+  localParentalApply();
+  showToast('✅ Local parental controls enabled on this device.');
+  localParentalRefreshUI();
+}
+
+async function localParentalDisable(){
+  var pin=prompt('Enter your local parental control PIN to disable:');
+  if(!pin){return;}
+  var hash=await sha256(pin);
+  var s=localParentalGetState();
+  if(hash!==s.hash){showToast('Incorrect PIN.');return;}
+  localParentalSaveState({});
+  localParentalUnapply();
+  showToast('Local parental controls disabled on this device.');
+  localParentalRefreshUI();
+}
+
+function localParentalApply(){
+  var s=localParentalGetState();
+  if(!s.enabled) return;
+  var blocked=s.blocked||{};
+  Object.keys(blocked).forEach(function(page){
+    if(blocked[page]){
+      document.querySelectorAll('.nav-dd-item[data-page="'+page+'"]').forEach(function(el){
+        el.style.display='none';
+      });
+    }
+  });
+  // Redirect if on a blocked page
+  if(typeof curPage!=='undefined'&&blocked[curPage]){
+    if(typeof navTo==='function') navTo('home');
+  }
+}
+
+function localParentalUnapply(){
+  // Re-show all nav items (the account parental may re-hide some)
+  document.querySelectorAll('.nav-dd-item').forEach(function(el){ el.style.display=''; });
+  if(typeof parentalApply==='function') parentalApply();
+}
+
+function localParentalRefreshUI(){
+  var s=localParentalGetState();
+  var btn=document.getElementById('local-parental-toggle-btn');
+  if(btn) btn.textContent=s.enabled?'🔓 Disable Local Parental Controls':'🔒 Enable Local Parental Controls on This Device';
+}
+
+// Apply on page load
+(function(){
+  document.addEventListener('DOMContentLoaded',function(){
+    localParentalApply();
+  });
+  // Also apply now in case DOMContentLoaded already fired
+  if(document.readyState!=='loading') localParentalApply();
+})();
+
+// Patch navTo to block locally-controlled pages
+(function(){
+  var _o=window.navTo;
+  window.navTo=function(page){
+    var s=localParentalGetState();
+    if(s.enabled&&s.blocked&&s.blocked[page]){
+      showToast('🔒 This page is blocked by local parental controls on this device.');
+      return;
+    }
+    if(_o) _o(page);
   };
 })();
 </script>
