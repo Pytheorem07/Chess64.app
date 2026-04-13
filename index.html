@@ -1340,6 +1340,19 @@ if(_fbReady && _auth){
 
     // Tell the rest of the app auth changed
     if(typeof window._onFbAuthChange === 'function') window._onFbAuthChange(user, _isAdmin);
+    // Sync displayName from Firestore to Firebase Auth so admin renames persist on refresh
+    if(user && !user.isAnonymous){
+      try{
+        const userSnap=await getDoc(doc(_db,'users',user.uid));
+        if(userSnap.exists()){
+          const fsName=userSnap.data().displayName;
+          if(fsName && fsName!==user.displayName){
+            await updateProfile(user,{displayName:fsName});
+            await user.getIdToken(true); // force token refresh
+          }
+        }
+      }catch(_){}
+    }
   });
 }
 </script>
@@ -1361,6 +1374,8 @@ if(_fbReady && _auth){
   "keywords": "chess, free chess, play chess online, chess puzzles, chess analysis, chess community"
 }
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 </head>
 <body>
 
@@ -1669,7 +1684,12 @@ if(_fbReady && _auth){
         <button class="btn btn-ghost btn-lg" onclick="navTo('analysis')">&#128269; Analysis</button>
         <button class="btn btn-ghost btn-lg" onclick="navTo('learn')">&#127891; Learn</button>
       </div>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px;margin-bottom:4px">
         <button class="btn btn-ghost btn-lg" onclick="navTo('annotated')">📚 GM Games</button>
+        <button class="btn btn-ghost btn-lg" onclick="navTo('chess3d')" style="border-color:rgba(88,166,255,0.4);color:var(--accent)">♟ Chess64 3D</button>
+        <button class="btn btn-ghost btn-lg" onclick="navTo('tilted')" title="Relax with our homemade Mario hobby game">🎮 Tilted? — Relax!</button>
+      </div>
+      <div style="font-size:12px;color:var(--text2);text-align:center;margin:4px 0 12px;opacity:0.7">😤 Tilted? Relax with our homemade Mario hobby game before your next game</div>
       <!-- Mini animated chess board showcase -->
       <div style="display:flex;justify-content:center;gap:20px;flex-wrap:wrap;margin-top:10px">
         <div><div id="home-demo-board" style="display:inline-block;border-radius:8px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.4)"></div><div id="home-demo-label" style="font-size:11px;color:var(--text2);text-align:center;margin-top:5px;font-style:italic;max-width:320px"></div></div>
@@ -5962,8 +5982,8 @@ function renderNotablePlayers(){
     const peak=p.peak?`<span style="color:var(--gold);font-weight:600">Peak: ${p.peak}</span>`:'<span style="color:var(--text2);font-size:10px">Pre-rating era</span>';
     const links=[];
     if(p.wiki)links.push(`<a href="https://en.wikipedia.org/wiki/${p.wiki}" target="_blank" style="color:var(--accent)">Wiki</a>`);
-    if(p.lichess)links.push(`<a href="https://lichess.org/@/${p.lichess}" target="_blank" style="color:var(--accent)">Lichess</a>`);
-    if(p.chesscom)links.push(`<a href="https://chess.com/member/${p.chesscom}" target="_blank" style="color:var(--accent)">Chess.com</a>`);
+    if(p.lichess)links.push(`<a href="https://lichess.org/@/${p.lichess}" target="_blank" data-parental-link="lichess.org" style="color:var(--accent)">Lichess</a>`);
+    if(p.chesscom)links.push(`<a href="https://chess.com/member/${p.chesscom}" target="_blank" data-parental-link="chess.com" style="color:var(--accent)">Chess.com</a>`);
     return `<div class="player-card" style="display:flex;flex-direction:column;gap:4px">
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:22px">${p.country}</span>
@@ -6020,8 +6040,8 @@ function searchPlayer(){
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
         <button class="btn btn-primary btn-sm" onclick="loadCCGames('${u}',true)">&#128196; Load Games</button>
-          <button class="btn btn-ghost btn-sm" onclick="loadCCRecentGames('${u}')" id="cc-recent-btn">&#128336; Recent (30 days)ays)</button>
-        <a href="https://www.chess.com/member/${u}" target="_blank" class="btn btn-ghost btn-sm">Chess.com &#8599;</a>
+          <button class="btn btn-ghost btn-sm" onclick="loadCCRecentGames('${u}')" id="cc-recent-btn">&#128336; Recent (30 days)</button>
+        <a href="https://www.chess.com/member/${u}" data-parental-link="chess.com" target="_blank" class="btn btn-ghost btn-sm">Chess.com &#8599;</a>
         <button class="btn btn-ghost btn-sm" onclick="analyzeAccount('${u}')" style="background:linear-gradient(135deg,var(--accent),#8b5cf6);color:#fff;border:none">&#128202; Analyze Account</button>
       </div>
       <div id="cc-account-stats"></div>
@@ -6224,7 +6244,7 @@ function showLbPlayer(username){
       </div>
       <div style="display:flex;gap:7px;flex-wrap:wrap">
         <button class="btn btn-primary btn-sm" onclick="loadPlayerGames('${username}')">&#128196; Load Games</button>
-        <a href="https://www.chess.com/member/${username}" target="_blank" class="btn btn-ghost btn-sm">Chess.com &#8599;</a>
+        <a href="https://www.chess.com/member/${username}" data-parental-link="chess.com" target="_blank" class="btn btn-ghost btn-sm">Chess.com &#8599;</a>
       </div>
       <div id="lb-player-games" style="margin-top:10px"></div>
     </div>`;
@@ -6364,6 +6384,8 @@ function navTo(page){
   if(!document.getElementById('page-'+page)){const d=document.createElement('div');d.className='page';d.id='page-'+page;document.body.appendChild(d);}
   document.getElementById('page-'+page)?.classList.add('active');
   document.querySelectorAll(`.nav-btn[data-page="${page}"],.nav-dd-item[data-page="${page}"]`).forEach(b=>b.classList.add('active'));
+  // Hide city dash panel when leaving tilted page
+  if(page!=='tilted'){var _cdp=document.getElementById('city-dash-panel');if(_cdp&&_cdp.style.display==='block'){_cdp.style.display='none';var _tm=document.getElementById('tilted-main-content');if(_tm)_tm.style.display='block';}}
   curPage=page;
   if(page==='home'){setTimeout(()=>{try{initHomeDemo();}catch(e){}},50);setTimeout(()=>{try{showTrivia();}catch(e){}},100);}
   else if(page==='play'){renderPlayBoard();renderBotGrid();renderMyBots();renderEmojiGrid();}
@@ -10053,31 +10075,45 @@ function initHomeDemo(){
   // Pick random game (changes each time home is visited)
   const game=DEMO_GAMES[_hdg%DEMO_GAMES.length];
   let gs=parseFen(START),mi=0,lm=null;
-  function rd(g,h){
-    el.innerHTML='';
-    const wrap=document.createElement('div');
-    wrap.style.cssText=`display:grid;grid-template-columns:repeat(8,${SZ}px);border-radius:5px;overflow:hidden`;
+    function rd(g,h){
+    // Build grid keyed by square so we can animate moves
+    const t=THEMES[settings&&settings.boardtheme||'forest']||THEMES.forest;
+    let wrap=el.querySelector('div[data-hd-board]');
+    const isFirst=!wrap;
+    if(isFirst){
+      wrap=document.createElement('div');
+      wrap.setAttribute('data-hd-board','1');
+      wrap.style.cssText=`display:grid;grid-template-columns:repeat(8,${SZ}px);border-radius:5px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.4)`;
+      el.innerHTML=''; el.appendChild(wrap);
+    }
     for(let row=0;row<8;row++){
       for(let col=0;col<8;col++){
-        const r=row,c=col;
-        const light=(r+c)%2===0;
-        const t=THEMES[settings&&settings.boardtheme||'forest']||THEMES.forest;
+        const light=(row+col)%2===0;
         const bg=light?t.l:t.d;
-        const p=g.board[r][c];
-        const isLM=h&&((h.fr===r&&h.fc===c)||(h.tr===r&&h.tc===c));
-        const sq=document.createElement('div');
-        sq.style.cssText=`width:${SZ}px;height:${SZ}px;display:flex;align-items:center;justify-content:center;background:${isLM?(light?'#cdd16f':'#aaa23b'):bg}`;
-        if(p){
-          const img=document.createElement('img');
-          img.src=pieceUrl(p);
-          img.style.cssText=`width:${SZ-4}px;height:${SZ-4}px;pointer-events:none`;
-          sq.appendChild(img);
+        const p=g.board[row][col];
+        const isLM=h&&((h.fr===row&&h.fc===col)||(h.tr===row&&h.tc===col));
+        const key=`sq-${row}-${col}`;
+        let sq=wrap.querySelector('[data-sq="'+key+'"]');
+        if(!sq){
+          sq=document.createElement('div');
+          sq.setAttribute('data-sq',key);
+          sq.style.cssText=`width:${SZ}px;height:${SZ}px;display:flex;align-items:center;justify-content:center;background:${bg};position:relative`;
+          wrap.appendChild(sq);
         }
-        wrap.appendChild(sq);
+        sq.style.background=bg;
+        sq.style.boxShadow=isLM?'inset 0 0 0 3px rgba(255,210,0,.7)':'';
+        // Update piece with fade-in animation
+        const newSrc=p?pieceUrl(p):'';
+        let img=sq.querySelector('img');
+        if(newSrc){
+          if(!img){img=document.createElement('img');img.style.cssText=`width:${SZ-4}px;height:${SZ-4}px;pointer-events:none;transition:opacity .25s,transform .25s`;sq.appendChild(img);}
+          if(img.src!==newSrc){img.style.opacity='0';img.style.transform='scale(0.7)';img.src=newSrc;requestAnimationFrame(()=>{img.style.opacity='1';img.style.transform='scale(1)';}); }
+        } else if(img){
+          img.style.opacity='0'; img.style.transform='scale(0.7)';
+          setTimeout(()=>{if(img.parentNode)img.parentNode.removeChild(img);},250);
+        }
       }
     }
-    el.appendChild(wrap);
-    // Show game name
     const nameEl=document.getElementById('home-demo-name');
     if(nameEl)nameEl.textContent=game.name;
   }
@@ -10095,7 +10131,7 @@ function initHomeDemo(){
     if(!m){clearInterval(_hdInt);return;}
     lm=m;gs=applyMove(gs,m);mi++;
     rd(gs,lm);
-  },mi===0?800:600);
+  },mi===0?700:480);
 }
 let _hdg=Math.floor(Math.random()*999); // start with random game
 let _hdInt=null;
@@ -17355,7 +17391,8 @@ async function fbSubmitRename(){
   var state=window._renameState||{usedFree:false,adminOk:false};
   try{
     var u=window._fb&&window._fb.user; if(!u) throw new Error('Not signed in');
-    if(!state.usedFree||state.adminOk){
+    var isAdminUser=!!(window._fb&&window._fb.isAdmin);
+    if(!state.usedFree||state.adminOk||isAdminUser){
       // Apply directly
       var tok=await u.getIdToken();
       var r=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:update?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
@@ -17398,12 +17435,13 @@ async function admLoadUsernameRequests(){
     var r=await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents:runQuery?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+_unTok},
-      body:JSON.stringify({structuredQuery:{from:[{collectionId:'usernameRequests'}],limit:100}})
+      body:JSON.stringify({structuredQuery:{from:[{collectionId:'usernameRequests'}],orderBy:[{field:{fieldPath:'createdAt'},direction:'DESCENDING'}],limit:100}})
     });
     var raw=await r.json();
-    var docs=(Array.isArray(raw)?raw:[raw]).filter(function(x){return x.document;}).map(function(x){return x.document;})
-      .filter(function(doc){return doc.fields;}) // show all username requests (pending, approved, denied);
-    if(!docs.length){el.innerHTML='<p style="color:var(--text2)">No pending requests.</p>';return;}
+    var docs=(Array.isArray(raw)?raw:[raw])
+      .filter(function(x){return x&&x.document&&x.document.fields;})
+      .map(function(x){return x.document;});
+    if(!docs.length){el.innerHTML='<p style="color:var(--text2)">No username requests found.</p>';return;}
     var html='';
     docs.forEach(function(doc){
       var f=doc.fields||{};
@@ -19554,7 +19592,7 @@ async function showLichessPlayer(username){
       +'</div>'
       +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:7px;margin-bottom:12px">'+ratingsHtml+'</div>'
       +'<div style="display:flex;gap:7px;flex-wrap:wrap">'
-      +'<a href="https://lichess.org/@/'+u.username+'" target="_blank" class="btn btn-ghost btn-sm">&#128279; Lichess Profile</a>'
+      +'<a href="https://lichess.org/@/'+u.username+'" target="_blank" data-parental-link="lichess.org" class="btn btn-ghost btn-sm">&#128279; Lichess Profile</a>'
       +'<button class="btn btn-ghost btn-sm" data-uid="'+u.username+'" onclick="analyzeLichessAccount(this.dataset.uid)">&#128200; Analyze Account</button>'
       +'</div>'
       +'<div id="li-player-games" style="margin-top:12px"></div>'
@@ -19626,7 +19664,7 @@ function _renderLichessAccountStats(username,games,el){
     +(Object.keys(oppLoss).length?'<div><span style="color:var(--text2);font-weight:600">&#128556; Most losses against:</span><br><div style="margin-top:4px">'+top3(oppLoss)+'</div></div>':'')
     +(Object.keys(oppCount).length?'<div><span style="color:var(--text2);font-weight:600">&#129309; Most played against:</span><br><div style="margin-top:4px">'+top3(oppCount)+'</div></div>':'')
     +(bestWin?'<div><span style="color:var(--text2);font-weight:600">&#11088; Best win:</span><br><div style="margin-top:4px"><span style="background:var(--bg3);border-radius:5px;padding:2px 7px;font-size:11px">vs '+bestWin.name.replace(/</g,'&lt;')+' (rated '+bestWin.rating+') <a href="https://lichess.org/'+bestWin.id+'" target="_blank" style="color:var(--accent)">&#8599;</a></span></div></div>':'')
-    +'</div><div style="margin-top:10px;text-align:center"><a href="https://lichess.org/@/'+username+'/perf/'+tc+'" target="_blank" class="btn btn-ghost btn-sm" style="font-size:11px">Full stats on Lichess &#8599;</a></div></div>';
+    +'</div><div style="margin-top:10px;text-align:center"><a href="https://lichess.org/@/'+username+'/perf/'+tc+'" target="_blank" data-parental-link="lichess.org" class="btn btn-ghost btn-sm" style="font-size:11px">Full stats on Lichess &#8599;</a></div></div>';
 }
 
 async function searchLichessUser(){
@@ -19662,7 +19700,7 @@ function loadBanner2700Fallback(){
         var av=p.avatar?'<img src="'+p.avatar+'" style="width:20px;height:20px;border-radius:50%;vertical-align:middle;margin-right:5px">':'';
         html+='<tr style="border-bottom:1px solid var(--border)">'
           +'<td style="padding:5px 8px;font-weight:700;color:var(--text2)">'+rank+'</td>'
-          +'<td style="padding:5px 4px">'+av+'<a href="https://chess.com/member/'+p.username+'" target="_blank" style="color:var(--accent);text-decoration:none">'+p.username+'</a></td>'
+          +'<td style="padding:5px 4px">'+av+'<a href="https://chess.com/member/'+p.username+'" target="_blank" data-parental-link="chess.com" style="color:var(--accent);text-decoration:none">'+p.username+'</a></td>'
           +'<td style="padding:5px 10px;text-align:right;font-weight:700;font-family:monospace">'+(p.score||p.rating||'?')+'</td>'
           +'</tr>';
       });
@@ -21440,7 +21478,7 @@ function admRestoreBuiltinGmGame(idx){
 
 /* ── Parental controls: link blocker ──────────────── */
 var _PARENTAL_BLOCKED_DOMAINS=[
-  'mario.nintendo.com','nintendo.com',
+  'mario.nintendo.com','nintendo.com','lichess.org','chess.com','www.chess.com','www.lichess.org',,
   'apple.com','music.apple.com','itunes.apple.com','developer.apple.com',
   'chess.com','www.chess.com',
   'lichess.org','lichess1.org',
@@ -21455,10 +21493,11 @@ var _PARENTAL_BLOCKED_DOMAINS=[
 
 function parentalBlockLinks(){
   // Block all external links in the DOM
-  document.querySelectorAll('a[href]').forEach(function(a){
+  document.querySelectorAll('a[href], a[data-orig-href], a[data-parental-link]').forEach(function(a){
     if(a.dataset.parentalBlocked) return;
-    var href=a.href||'';
-    var shouldBlock=_PARENTAL_BLOCKED_DOMAINS.some(function(d){return href.includes(d);})
+    var href=a.href||a.dataset.origHref||'';
+    var taggedDomain=a.dataset.parentalLink||'';
+    var shouldBlock=_PARENTAL_BLOCKED_DOMAINS.some(function(d){return href.includes(d)||(taggedDomain&&d.includes(taggedDomain));})
       || (href.startsWith('http')&&!href.includes(location.hostname));
     if(shouldBlock){
       a.dataset.parentalBlocked='1';
@@ -23122,6 +23161,12 @@ function toggleOpeningFlash(){
           <h3 style="margin:0 0 6px">Set a "one more game" rule</h3>
           <p style="color:var(--text2);font-size:13px;margin:0">Tilt multiplies. Decide now: after this next game you stop for today — win or lose. Discipline beats impulse.</p>
         </div>
+        <div class="card" style="padding:18px">
+          <div style="font-size:28px;margin-bottom:8px">🏃</div>
+          <h3 style="margin:0 0 6px">Play City Dash</h3>
+          <p style="color:var(--text2);font-size:13px;margin:0 0 12px">A fast-paced 3D running game. Dodge, jump, and sprint through neon corridors. Pure flow state.</p>
+          <button class="btn btn-primary btn-sm" onclick="cityDashShow()">▶ Play City Dash</button>
+        </div>
       </div>
 
       <!-- Game launcher card -->
@@ -23215,6 +23260,12 @@ function toggleOpeningFlash(){
             <p>Controls: Arrows/WASD to Move | Space/Up to Jump</p>
             <p>F to Shoot (Fire/Ice) | Hold Jump to Fly (Wings)</p>
         </div>
+        <div class="mt-4">
+            <button id="btnMobileControls" onclick="marioToggleMobileControls()" class="btn" style="background:rgba(56,189,248,0.2);border:2px solid #38bdf8;color:#38bdf8;font-size:0.85rem;padding:8px 20px">
+                📱 Mobile Controls: OFF
+            </button>
+            <p style="font-size:0.7rem;color:#64748b;margin-top:6px">Tap to add on-screen d-pad for mobile/touch play</p>
+        </div>
     </div>
 
     <!-- Level Select Menu -->
@@ -23291,7 +23342,7 @@ function toggleOpeningFlash(){
         // Game State
         let currentWorld = 1; // 1 to 5
         let currentLevel = 1; 
-        let maxLevelsPerWorld = {1:7, 2:7, 3:7, 4:10, 5:10};
+        let maxLevelsPerWorld = {1:7, 2:7, 3:7, 4:10, 5:10, 6:12};
         
         let totalScore = 0;
         let totalCoins = 0;
@@ -23506,7 +23557,7 @@ function toggleOpeningFlash(){
             }
 
             // Init Weather / Ambient particles
-            let ptCount = currentWorld === 5 ? 150 : 100;
+            let ptCount = currentWorld === 5 ? 150 : (currentWorld === 6 ? 200 : 100);
             if (currentWorld >= 2) {
                 for(let i=0; i<ptCount; i++) {
                     weatherParticles.push({
@@ -23578,6 +23629,12 @@ function toggleOpeningFlash(){
             else if (currentWorld === 5) { // Neon Space
                 prm.gapMin = 180; prm.gapMax = 350; prm.platMin = 100; prm.platMax = 300; 
                 prm.yVariance = 200; prm.yVolatility = 0.8; prm.movingChance = 0.7; prm.enemyChance = 0.7; prm.spikeChance = 0.5;
+            }
+            else if (currentWorld === 6) { // Deep Ocean — hardest world
+                prm.gapMin = 200; prm.gapMax = 380; prm.platMin = 80; prm.platMax = 250;
+                prm.yVariance = 220; prm.yVolatility = 0.9; prm.movingChance = 0.8;
+                prm.enemyChance = 0.85; prm.spikeChance = 0.5; prm.springChance = 0.15;
+                prm.segments = 18 + currentLevel * 2; prm.waterWorld = true;
             }
 
             // Start Platform
@@ -23658,7 +23715,12 @@ function toggleOpeningFlash(){
 
                     // Powerups (Fully randomized item generation)
                     if (i % 5 === 4 || (currentWorld===1 && currentLevel===2 && i===1)) {
-                        const types = ['bike', 'fire', 'speed', 'ice', 'wings', 'growth', 'doubleJump'];
+                        // W5/W6 get extra powerful items incl. shield
+                const types = currentWorld >= 5
+                    ? ['fire','fire','ice','ice','wings','wings','growth','speed','speed','doubleJump','shield','shield','bike']
+                    : currentWorld === 4
+                    ? ['bike','fire','speed','ice','wings','growth','doubleJump','shield']
+                    : ['bike','fire','speed','ice','wings','growth','doubleJump'];
                         // True random for variety on replays
                         let pType = types[Math.floor(Math.random() * types.length)];
                         platforms.push({ x: curX + segmentWidth/2 - 40, y: platformY - 140, w: 80, h: 30, type: 'item', content: pType, used: false, vx: 0, vy: 0 });
@@ -23674,8 +23736,8 @@ function toggleOpeningFlash(){
             } else {
                 // Boss Arena
                 platforms.push({ x: curX, y: 450, w: 1800, h: 80, type: 'ground', vx: 0, vy: 0 });
-                let bossHP = currentWorld === 1 ? 10 : (currentWorld === 2 ? 15 : (currentWorld === 3 ? 20 : (currentWorld===4? 30 : 50)));
-                let bossSpeed = 3.5 + currentWorld * 1.2;
+                let bossHP = currentWorld === 1 ? 10 : (currentWorld === 2 ? 15 : (currentWorld === 3 ? 20 : (currentWorld === 4 ? 30 : (currentWorld === 5 ? 45 : 60))));
+                let bossSpeed = currentWorld === 6 ? 9.5 : (3.5 + currentWorld * 1.2);
                 
                 boss = {
                     x: curX + 800, y: 360, w: 80, h: 90, 
@@ -23693,8 +23755,27 @@ function toggleOpeningFlash(){
             initLevel(true);
         }
 
+        function showPowerupText(text, color) {
+            var el=document.getElementById('powerup-text');
+            if(!el){
+                el=document.createElement('div');
+                el.id='powerup-text';
+                el.style.cssText='position:absolute;top:20%;left:50%;transform:translateX(-50%);font-size:28px;font-weight:900;color:'+color+';text-shadow:0 0 20px '+color+';pointer-events:none;z-index:200;transition:opacity .3s;border-radius:8px;padding:4px 16px;background:rgba(0,0,0,.4)';
+                var canvas=document.querySelector('#mario4-wrap canvas')||document.querySelector('canvas');
+                if(canvas&&canvas.parentNode) canvas.parentNode.appendChild(el);
+                else document.body.appendChild(el);
+            }
+            el.textContent=text;
+            el.style.color=color;
+            el.style.textShadow='0 0 20px '+color;
+            el.style.opacity='1';
+            clearTimeout(el._t);
+            el._t=setTimeout(function(){el.style.opacity='0';},1200);
+        }
         function handleDamage(isFall = false) {
             if (player.invuln > 0 && !isFall) return;
+            if(player.hasShield&&!isFall){player.hasShield=false;player.invuln=60;shakeScreen(8);showPowerupText('SHIELD BROKE!','#94a3b8');return;}
+            if (player.hasShield && !isFall) { player.hasShield=false; player.shieldTimer=0; player.invuln=60; shakeScreen(8); showPowerupText('SHIELD BROKE!','#94a3b8'); return; }
 
             // Big player simply shrinks
             if (player.isBig && !isFall) {
@@ -23963,7 +24044,9 @@ function toggleOpeningFlash(){
                     if(it.type === 'ice') { player.hasIce = true; player.hasFire = false; }
                     if(it.type === 'wings') { player.hasWings = true; player.wingTimer = 900; player.hasBike = false; player.hasSpeed = false; }
                     if(it.type === 'growth') { setPlayerScale(true); }
-                    if(it.type === 'doubleJump') { player.hasDoubleJump = true; }
+                    if(it.type === 'doubleJump') { player.hasDoubleJump = true; showPowerupText('DOUBLE JUMP!', '#a78bfa'); }
+                    if(it.type === 'shield') { player.hasShield=true; player.shieldTimer=600; showPowerupText('🛡 SHIELD!','#38bdf8'); }
+                    if(it.type === 'gun') { player.hasGun=true; player.gunAmmo=20; player.hasFire=true; showPowerupText('🔫 RAPID FIRE!','#f97316'); }
                     
                     totalScore += 1000; updateUI();
                     spawnParticles(it.x+20, it.y+20, '#fff', 30, 8, true);
@@ -24019,16 +24102,33 @@ function toggleOpeningFlash(){
                 boss.velY += gravityMod; boss.y += boss.velY;
                 if (boss.invuln > 0) boss.invuln--;
                 
-                if (boss.y > 360) { boss.y = 360; boss.velY = 0; boss.isGrounded = true; } 
+                // Boss floor/ceiling clamp — no flying off screen
+                if (boss.y > 360) { boss.y = 360; boss.velY = 0; boss.isGrounded = true; }
+                if (boss.y < 200) { boss.y = 200; boss.velY = 2; } // ceiling clamp
+                // Keep boss horizontally near player
+                if (boss.x > player.x + 800) boss.velX = -boss.speed;
+                if (boss.x < player.x - 400) boss.velX = boss.speed;
                 
                 boss.jumpTimer++;
-                let jumpThreshold = 60 - (currentWorld * 5); 
-                if (boss.jumpTimer > jumpThreshold && boss.isGrounded) { 
-                    boss.velY = currentWorld===5 ? -15 : -12; 
-                    boss.jumpTimer = 0; 
-                    boss.velX = (player.x < boss.x) ? -boss.speed : boss.speed; 
+                let jumpThreshold = 60 - (currentWorld * 5);
+                if (boss.jumpTimer > jumpThreshold && boss.isGrounded) {
+                    boss.velY = -10; // reduced from -15 so boss doesn't fly
+                    boss.jumpTimer = 0;
+                    boss.velX = (player.x < boss.x) ? -boss.speed : boss.speed;
                     boss.facingRight = boss.velX > 0;
                     shakeScreen(5);
+                }
+                // Boss shooting (W4+ boss shoots projectiles)
+                if (!boss.shootTimer) boss.shootTimer=0;
+                boss.shootTimer++;
+                let shootInterval = currentWorld===6 ? 35 : (currentWorld===5 ? 50 : 9999); // only W5+ boss shoots
+                if (boss.shootTimer > shootInterval) {
+                    boss.shootTimer=0;
+                    let dir = (player.x < boss.x) ? -1 : 1;
+                    enemyProjectiles.push({x:boss.x+(dir>0?boss.w:0), y:boss.y+30, w:14, h:14, velX:dir*8, type:'boss'});
+                    if(currentWorld===5) { // Double shot for W5
+                        enemyProjectiles.push({x:boss.x+(dir>0?boss.w:0), y:boss.y+50, w:14, h:14, velX:dir*7, type:'boss'});
+                    }
                 }
 
                 if (checkRect(player, boss) && boss.invuln <= 0) {
@@ -24063,7 +24163,7 @@ function toggleOpeningFlash(){
             if (currentLevel < maxLevelsPerWorld[currentWorld]) {
                 currentLevel++;
             } else {
-                if (currentWorld < 5) {
+                if (currentWorld < 6) {
                     currentWorld++;
                     currentLevel = 1;
                     lives = 3; 
@@ -24144,7 +24244,7 @@ function toggleOpeningFlash(){
                 }
             }
 
-            const shirtColor = isBoss ? (currentWorld === 5 ? '#f472b6' : (currentWorld === 4 ? '#000' : '#4c1d95')) : (p.hasFire ? '#f97316' : (p.hasIce ? '#38bdf8' : '#ef4444'));
+            const shirtColor = isBoss ? (currentWorld === 6 ? '#00e5ff' : (currentWorld === 5 ? '#f472b6' : (currentWorld === 4 ? '#000' : '#4c1d95'))) : (p.hasFire ? '#f97316' : (p.hasIce ? '#38bdf8' : '#ef4444'));
             const pantsColor = isBoss ? '#1e1b4b' : (p.hasFire ? '#ffffff' : (p.hasIce ? '#0f172a' : '#3b82f6'));
             const skinColor = isBoss ? (currentWorld===5? '#2dd4bf' : '#7c3aed') : '#ffdbac';
             const shoeColor = (!isBoss && p.hasDoubleJump) ? '#4ade80' : '#000'; // Green boots for double jump
@@ -24181,11 +24281,12 @@ function toggleOpeningFlash(){
                 2: ['#d97706', '#fef3c7'], // Desert
                 3: ['#0f172a', '#1e3a8a'], // Ice/Night
                 4: ['#450a0a', '#000000'], // Volcano
-                5: ['#170b2e', '#000000']  // Neon Space
+                5: ['#170b2e', '#000000'],  // Neon Space
+                6: ['#001a33', '#003366']   // Deep Ocean / Underwater
             };
             let grad = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
-            grad.addColorStop(0, bgGradients[currentWorld][0]);
-            grad.addColorStop(1, bgGradients[currentWorld][1]);
+            grad.addColorStop(0, (bgGradients[currentWorld]||bgGradients[5])[0]);
+            grad.addColorStop(1, (bgGradients[currentWorld]||bgGradients[5])[1]);
             ctx.fillStyle = grad;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -24346,9 +24447,20 @@ function toggleOpeningFlash(){
             });
 
             enemyProjectiles.forEach(p => {
-                ctx.fillStyle = '#fef08a'; ctx.shadowBlur = 15; ctx.shadowColor = '#eab308';
-                ctx.fillRect(p.x, p.y, p.w, p.h);
-                ctx.shadowBlur = 0;
+                if(p.type==='boss'){
+                    // Boss projectile - big glowing red/orange fireball
+                    ctx.save();
+                    ctx.shadowBlur=25; ctx.shadowColor='#ef4444';
+                    ctx.fillStyle='#ef4444';
+                    ctx.beginPath(); ctx.arc(p.x+p.w/2, p.y+p.h/2, p.w/2+2, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle='#fef08a';
+                    ctx.beginPath(); ctx.arc(p.x+p.w/2, p.y+p.h/2, p.w/3, 0, Math.PI*2); ctx.fill();
+                    ctx.restore();
+                } else {
+                    ctx.fillStyle = '#fef08a'; ctx.shadowBlur = 15; ctx.shadowColor = '#eab308';
+                    ctx.fillRect(p.x, p.y, p.w, p.h);
+                    ctx.shadowBlur = 0;
+                }
             });
             
             // Enemies
@@ -24487,7 +24599,7 @@ function toggleOpeningFlash(){
         // Game State
         let currentWorld = 1; // 1 to 5
         let currentLevel = 1; 
-        let maxLevelsPerWorld = {1:7, 2:7, 3:7, 4:10, 5:10};
+        let maxLevelsPerWorld = {1:7, 2:7, 3:7, 4:10, 5:10, 6:12};
         
         let totalScore = 0;
         let totalCoins = 0;
@@ -24702,7 +24814,7 @@ function toggleOpeningFlash(){
             }
 
             // Init Weather / Ambient particles
-            let ptCount = currentWorld === 5 ? 150 : 100;
+            let ptCount = currentWorld === 5 ? 150 : (currentWorld === 6 ? 200 : 100);
             if (currentWorld >= 2) {
                 for(let i=0; i<ptCount; i++) {
                     weatherParticles.push({
@@ -24774,6 +24886,11 @@ function toggleOpeningFlash(){
             else if (currentWorld === 5) { // Neon Space
                 prm.gapMin = 180; prm.gapMax = 350; prm.platMin = 100; prm.platMax = 300; 
                 prm.yVariance = 200; prm.yVolatility = 0.8; prm.movingChance = 0.7; prm.enemyChance = 0.7; prm.spikeChance = 0.5;
+            }
+            else if (currentWorld === 6) { // Deep Ocean — hardest world
+                prm.gapMin=200;prm.gapMax=380;prm.platMin=80;prm.platMax=250;
+                prm.yVariance=220;prm.yVolatility=0.9;prm.movingChance=0.8;
+                prm.enemyChance=0.85;prm.spikeChance=0.5;prm.springChance=0.15;
             }
 
             // Start Platform
@@ -24854,7 +24971,12 @@ function toggleOpeningFlash(){
 
                     // Powerups (Fully randomized item generation)
                     if (i % 5 === 4 || (currentWorld===1 && currentLevel===2 && i===1)) {
-                        const types = ['bike', 'fire', 'speed', 'ice', 'wings', 'growth', 'doubleJump'];
+                        // W5/W6 get extra powerful items incl. shield
+                const types = currentWorld >= 5
+                    ? ['fire','fire','ice','ice','wings','wings','growth','speed','speed','doubleJump','shield','shield','bike']
+                    : currentWorld === 4
+                    ? ['bike','fire','speed','ice','wings','growth','doubleJump','shield']
+                    : ['bike','fire','speed','ice','wings','growth','doubleJump'];
                         // True random for variety on replays
                         let pType = types[Math.floor(Math.random() * types.length)];
                         platforms.push({ x: curX + segmentWidth/2 - 40, y: platformY - 140, w: 80, h: 30, type: 'item', content: pType, used: false, vx: 0, vy: 0 });
@@ -24870,8 +24992,8 @@ function toggleOpeningFlash(){
             } else {
                 // Boss Arena
                 platforms.push({ x: curX, y: 450, w: 1800, h: 80, type: 'ground', vx: 0, vy: 0 });
-                let bossHP = currentWorld === 1 ? 10 : (currentWorld === 2 ? 15 : (currentWorld === 3 ? 20 : (currentWorld===4? 30 : 50)));
-                let bossSpeed = 3.5 + currentWorld * 1.2;
+                let bossHP = currentWorld === 1 ? 10 : (currentWorld === 2 ? 15 : (currentWorld === 3 ? 20 : (currentWorld === 4 ? 30 : (currentWorld === 5 ? 45 : 60))));
+                let bossSpeed = currentWorld === 6 ? 9.5 : (3.5 + currentWorld * 1.2);
                 
                 boss = {
                     x: curX + 800, y: 360, w: 80, h: 90, 
@@ -24889,8 +25011,26 @@ function toggleOpeningFlash(){
             initLevel(true);
         }
 
+        function showPowerupText(text, color) {
+            var el=document.getElementById('powerup-text');
+            if(!el){
+                el=document.createElement('div');
+                el.id='powerup-text';
+                el.style.cssText='position:absolute;top:20%;left:50%;transform:translateX(-50%);font-size:28px;font-weight:900;color:'+color+';text-shadow:0 0 20px '+color+';pointer-events:none;z-index:200;transition:opacity .3s;border-radius:8px;padding:4px 16px;background:rgba(0,0,0,.4)';
+                var canvas=document.querySelector('#mario4-wrap canvas')||document.querySelector('canvas');
+                if(canvas&&canvas.parentNode) canvas.parentNode.appendChild(el);
+                else document.body.appendChild(el);
+            }
+            el.textContent=text;
+            el.style.color=color;
+            el.style.textShadow='0 0 20px '+color;
+            el.style.opacity='1';
+            clearTimeout(el._t);
+            el._t=setTimeout(function(){el.style.opacity='0';},1200);
+        }
         function handleDamage(isFall = false) {
             if (player.invuln > 0 && !isFall) return;
+            if(player.hasShield&&!isFall){player.hasShield=false;player.invuln=60;shakeScreen(8);showPowerupText('SHIELD BROKE!','#94a3b8');return;}
 
             // Big player simply shrinks
             if (player.isBig && !isFall) {
@@ -25159,7 +25299,8 @@ function toggleOpeningFlash(){
                     if(it.type === 'ice') { player.hasIce = true; player.hasFire = false; }
                     if(it.type === 'wings') { player.hasWings = true; player.wingTimer = 900; player.hasBike = false; player.hasSpeed = false; }
                     if(it.type === 'growth') { setPlayerScale(true); }
-                    if(it.type === 'doubleJump') { player.hasDoubleJump = true; }
+                    if(it.type === 'doubleJump') { player.hasDoubleJump = true; showPowerupText('DOUBLE JUMP!','#a78bfa'); }
+                    else if(it.type === 'shield') { player.hasShield=true; player.shieldTimer=600; showPowerupText('🛡 SHIELD!','#38bdf8'); }
                     
                     totalScore += 1000; updateUI();
                     spawnParticles(it.x+20, it.y+20, '#fff', 30, 8, true);
@@ -25215,16 +25356,33 @@ function toggleOpeningFlash(){
                 boss.velY += gravityMod; boss.y += boss.velY;
                 if (boss.invuln > 0) boss.invuln--;
                 
-                if (boss.y > 360) { boss.y = 360; boss.velY = 0; boss.isGrounded = true; } 
+                // Boss floor/ceiling clamp — no flying off screen
+                if (boss.y > 360) { boss.y = 360; boss.velY = 0; boss.isGrounded = true; }
+                if (boss.y < 200) { boss.y = 200; boss.velY = 2; } // ceiling clamp
+                // Keep boss horizontally near player
+                if (boss.x > player.x + 800) boss.velX = -boss.speed;
+                if (boss.x < player.x - 400) boss.velX = boss.speed;
                 
                 boss.jumpTimer++;
-                let jumpThreshold = 60 - (currentWorld * 5); 
-                if (boss.jumpTimer > jumpThreshold && boss.isGrounded) { 
-                    boss.velY = currentWorld===5 ? -15 : -12; 
-                    boss.jumpTimer = 0; 
-                    boss.velX = (player.x < boss.x) ? -boss.speed : boss.speed; 
+                let jumpThreshold = 60 - (currentWorld * 5);
+                if (boss.jumpTimer > jumpThreshold && boss.isGrounded) {
+                    boss.velY = -10; // reduced from -15 so boss doesn't fly
+                    boss.jumpTimer = 0;
+                    boss.velX = (player.x < boss.x) ? -boss.speed : boss.speed;
                     boss.facingRight = boss.velX > 0;
                     shakeScreen(5);
+                }
+                // Boss shooting (W4+ boss shoots projectiles)
+                if (!boss.shootTimer) boss.shootTimer=0;
+                boss.shootTimer++;
+                let shootInterval = currentWorld===6 ? 35 : (currentWorld===5 ? 50 : 9999); // only W5+ boss shoots
+                if (boss.shootTimer > shootInterval) {
+                    boss.shootTimer=0;
+                    let dir = (player.x < boss.x) ? -1 : 1;
+                    enemyProjectiles.push({x:boss.x+(dir>0?boss.w:0), y:boss.y+30, w:14, h:14, velX:dir*8, type:'boss'});
+                    if(currentWorld===5) { // Double shot for W5
+                        enemyProjectiles.push({x:boss.x+(dir>0?boss.w:0), y:boss.y+50, w:14, h:14, velX:dir*7, type:'boss'});
+                    }
                 }
 
                 if (checkRect(player, boss) && boss.invuln <= 0) {
@@ -25259,7 +25417,7 @@ function toggleOpeningFlash(){
             if (currentLevel < maxLevelsPerWorld[currentWorld]) {
                 currentLevel++;
             } else {
-                if (currentWorld < 5) {
+                if (currentWorld < 6) {
                     currentWorld++;
                     currentLevel = 1;
                     lives = 3; 
@@ -25340,7 +25498,7 @@ function toggleOpeningFlash(){
                 }
             }
 
-            const shirtColor = isBoss ? (currentWorld === 5 ? '#f472b6' : (currentWorld === 4 ? '#000' : '#4c1d95')) : (p.hasFire ? '#f97316' : (p.hasIce ? '#38bdf8' : '#ef4444'));
+            const shirtColor = isBoss ? (currentWorld === 6 ? '#00e5ff' : (currentWorld === 5 ? '#f472b6' : (currentWorld === 4 ? '#000' : '#4c1d95'))) : (p.hasFire ? '#f97316' : (p.hasIce ? '#38bdf8' : '#ef4444'));
             const pantsColor = isBoss ? '#1e1b4b' : (p.hasFire ? '#ffffff' : (p.hasIce ? '#0f172a' : '#3b82f6'));
             const skinColor = isBoss ? (currentWorld===5? '#2dd4bf' : '#7c3aed') : '#ffdbac';
             const shoeColor = (!isBoss && p.hasDoubleJump) ? '#4ade80' : '#000'; // Green boots for double jump
@@ -25377,11 +25535,12 @@ function toggleOpeningFlash(){
                 2: ['#d97706', '#fef3c7'], // Desert
                 3: ['#0f172a', '#1e3a8a'], // Ice/Night
                 4: ['#450a0a', '#000000'], // Volcano
-                5: ['#170b2e', '#000000']  // Neon Space
+                5: ['#170b2e', '#000000'],  // Neon Space
+                6: ['#001a33', '#003366']   // Deep Ocean / Underwater
             };
             let grad = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
-            grad.addColorStop(0, bgGradients[currentWorld][0]);
-            grad.addColorStop(1, bgGradients[currentWorld][1]);
+            grad.addColorStop(0, (bgGradients[currentWorld]||bgGradients[5])[0]);
+            grad.addColorStop(1, (bgGradients[currentWorld]||bgGradients[5])[1]);
             ctx.fillStyle = grad;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -25542,9 +25701,20 @@ function toggleOpeningFlash(){
             });
 
             enemyProjectiles.forEach(p => {
-                ctx.fillStyle = '#fef08a'; ctx.shadowBlur = 15; ctx.shadowColor = '#eab308';
-                ctx.fillRect(p.x, p.y, p.w, p.h);
-                ctx.shadowBlur = 0;
+                if(p.type==='boss'){
+                    // Boss projectile - big glowing red/orange fireball
+                    ctx.save();
+                    ctx.shadowBlur=25; ctx.shadowColor='#ef4444';
+                    ctx.fillStyle='#ef4444';
+                    ctx.beginPath(); ctx.arc(p.x+p.w/2, p.y+p.h/2, p.w/2+2, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle='#fef08a';
+                    ctx.beginPath(); ctx.arc(p.x+p.w/2, p.y+p.h/2, p.w/3, 0, Math.PI*2); ctx.fill();
+                    ctx.restore();
+                } else {
+                    ctx.fillStyle = '#fef08a'; ctx.shadowBlur = 15; ctx.shadowColor = '#eab308';
+                    ctx.fillRect(p.x, p.y, p.w, p.h);
+                    ctx.shadowBlur = 0;
+                }
             });
             
             // Enemies
@@ -25793,16 +25963,41 @@ async function localParentalDisable(){
 
 function localParentalApply(){
   var s=localParentalGetState();
-  if(!s.enabled) return;
+  if(!s.enabled){
+    document.querySelectorAll('[data-local-parental-hidden]').forEach(function(el){
+      el.style.display=''; el.removeAttribute('data-local-parental-hidden');
+    });
+    document.querySelectorAll('a[data-local-parental-blocked]').forEach(function(a){
+      if(a.dataset.origHref){a.href=a.dataset.origHref;}
+      a.style.pointerEvents=''; a.style.opacity='';
+      a.removeAttribute('data-local-parental-blocked');
+    });
+    return;
+  }
   var blocked=s.blocked||{};
   Object.keys(blocked).forEach(function(page){
     if(blocked[page]){
       document.querySelectorAll('.nav-dd-item[data-page="'+page+'"]').forEach(function(el){
-        el.style.display='none';
+        el.style.display='none'; el.setAttribute('data-local-parental-hidden','1');
       });
     }
   });
-  // Redirect if on a blocked page
+  // Block external links that are in the parental blocked domains list
+  var _blockedDoms=typeof _PARENTAL_BLOCKED_DOMAINS!=='undefined'?_PARENTAL_BLOCKED_DOMAINS:
+    ['lichess.org','chess.com','nintendo.com','youtube.com'];
+  document.querySelectorAll('a').forEach(function(a){
+    var href=a.getAttribute('href')||a.href||'';
+    var abs=a.href||href;
+    var taggedDomain=a.dataset.parentalLink||'';
+    var shouldBlock=taggedDomain.length>0||_blockedDoms.some(function(d){return abs.toLowerCase().includes(d.toLowerCase());});
+    if(shouldBlock&&!a.dataset.localParentalBlocked){
+      a.dataset.localParentalBlocked='1';
+      a.dataset.origHref=abs;
+      a.removeAttribute('href');
+      a.style.pointerEvents='none'; a.style.opacity='0.5';
+      a.title='Link blocked by local parental controls';
+    }
+  });
   if(typeof curPage!=='undefined'&&blocked[curPage]){
     if(typeof navTo==='function') navTo('home');
   }
@@ -26092,7 +26287,9 @@ function localParentalRefreshPanel(){
           +'<div style="width:40px;height:22px;border-radius:11px;background:'+(isBlocked?'var(--accent)':'#555')+';position:relative;cursor:pointer;transition:background .2s;flex-shrink:0" '
           +'onclick="localParentalTogglePage(\''+page+'\')">'
           +'<div style="position:absolute;top:3px;'+(isBlocked?'left:20px':'left:3px')+';width:16px;height:16px;background:white;border-radius:50%;transition:left .2s"></div>'
-          +'</div></div>';
+          +'</div>'
+
+</div>';
       }).join('');
     togglesEl.style.display='block';
   } else if(togglesEl){
@@ -26227,7 +26424,7 @@ function setBtnStyle(style){
   var sel=document.getElementById('btn-style-select');
   if(sel) sel.value=style;
   try{localStorage.setItem('c64_btn_style',style);}catch(_){}
-  if(style!=='classic') showToast('Button style: '+style);
+  if(style!=='classic'&&!setBtnStyle._silent) showToast('Button style: '+style);
 }
 
 function togglePopoutButtons(){
@@ -26346,1168 +26543,1658 @@ window.tiltedHideGame=function(){
 };
 </script>
 
-<!-- ═══════════════════════ CHESS64 3D PAGE ═══════════════════════ -->
-<div class="page" id="page-chess3d">
-  <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;padding:0 12px;flex-wrap:wrap">
-    <h1 style="margin:0">♟ Chess64 3D</h1>
-    <button class="btn btn-ghost btn-sm" onclick="navTo('play')" style="margin-left:auto">← Back to Chess64</button>
+
+
+    <!-- City Dash game panel (inside page-tilted) -->
+    <div id="city-dash-panel" style="display:none">
+      <div style="display:flex;gap:8px;padding:10px 0;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="cityDashHide()">← Back to Tilted?</button>
+        <button class="btn btn-ghost btn-sm" onclick="navTo('home')">← Chess64 Home</button>
+        <span style="font-size:11px;color:var(--text2);margin-left:auto">← → Dodge · ↑/Space Jump · Double-jump!</span>
+      </div>
+      <!-- City Dash game settings -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
+        <label style="font-size:11px;color:var(--text2)">Jump:</label>
+        <select id="cr-dj-toggle" style="font-size:11px;padding:3px 6px;border-radius:6px;background:var(--bg3);color:var(--text1);border:1px solid rgba(255,255,255,.1)">
+          <option value="true">Double Jump</option><option value="false">Single Jump</option>
+        </select>
+        <label style="font-size:11px;color:var(--text2)">Obstacles:</label>
+        <select id="cr-hard-toggle" style="font-size:11px;padding:3px 6px;border-radius:6px;background:var(--bg3);color:var(--text1);border:1px solid rgba(255,255,255,.1)">
+          <option value="false">Normal</option><option value="true">⚠ Intense</option>
+        </select>
+        <label style="font-size:11px;color:var(--text2)">Scenery:</label>
+        <select id="cr-scenery-toggle" style="font-size:11px;padding:3px 6px;border-radius:6px;background:var(--bg3);color:var(--text1);border:1px solid rgba(255,255,255,.1)">
+          <option value="city">🌆 City (Default)</option>
+          <option value="sunset">🌅 Sunset City</option>
+          <option value="rainy">🌧 Rainy Night</option>
+          <option value="neon">💜 Neon District</option>
+        </select>
+        <label style="font-size:11px;color:var(--text2)">Controls:</label>
+        <select id="cr-keys-toggle" style="font-size:11px;padding:3px 6px;border-radius:6px;background:var(--bg3);color:var(--text1);border:1px solid rgba(255,255,255,.1)">
+          <option value="true">Show Buttons</option><option value="false">Hide Buttons</option>
+        </select>
+      </div>
+      <div id="cr-wrap" style="position:relative;width:100%;height:500px;background:#050a12;border-radius:12px;overflow:hidden">
+        <div style="position:absolute;top:0;left:0;width:100%;padding:16px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;z-index:10;box-sizing:border-box">
+          <div>
+            <div id="cr-score" style="font-size:22px;font-weight:900;color:#fff;text-shadow:0 0 12px rgba(0,212,255,.6)">SCORE: 0</div>
+            <div id="cr-speed-mult" style="font-size:13px;font-weight:700;color:#00d4ff;opacity:.9">1.0x</div>
+          </div>
+          <div style="text-align:right">
+            <div id="cr-hi" style="font-size:16px;font-weight:700;color:#60a5fa">BEST: 0</div>
+            <button id="cr-pause-btn" style="pointer-events:auto;margin-top:4px;padding:4px 10px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:white;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">⏸ Pause</button>
+          </div>
+        </div>
+        <div id="cr-powerup-msg" style="position:absolute;top:18%;left:50%;transform:translateX(-50%);font-size:26px;font-weight:900;color:#fff;text-shadow:0 0 20px currentColor;z-index:20;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap"></div>
+        <div id="cr-shield-ring" style="display:none;position:absolute;top:50%;left:50%;width:120px;height:120px;margin:-60px 0 0 -60px;border:3px solid #38bdf8;border-radius:50%;z-index:15;pointer-events:none;box-shadow:0 0 20px #38bdf8,inset 0 0 20px rgba(56,189,248,.3)"></div>
+        <div id="cr-overlay" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(5,10,18,.88);z-index:30">
+          <div style="font-size:3rem;font-weight:900;margin-bottom:.5rem;background:linear-gradient(135deg,#00d4ff,#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent" id="cr-title">CITY DASH</div>
+          <div id="cr-msg" style="color:#94a3b8;margin-bottom:.5rem;font-size:1rem"></div>
+          <div id="cr-final-score" style="color:#fbbf24;font-size:1.2rem;font-weight:700;margin-bottom:1.5rem"></div>
+          <div id="cr-hi2" style="color:#60a5fa;font-size:1rem;font-weight:600;margin-bottom:1rem">BEST: 0</div>
+          <button id="cr-start" style="padding:12px 36px;font-size:1.1rem;font-weight:700;border:none;border-radius:10px;cursor:pointer;background:linear-gradient(135deg,#00d4ff,#3b82f6);color:white;box-shadow:0 0 24px rgba(0,212,255,.4)">▶ Start Run</button>
+          <p style="color:#4b5563;font-size:12px;margin-top:16px">← → dodge · ↑ or Space to jump · Collect coins · Avoid buses!</p>
+        </div>
+        <div style="position:absolute;bottom:16px;left:0;right:0;display:flex;justify-content:space-between;padding:0 20px;z-index:20;pointer-events:none">
+          <button id="cr-btn-left" style="width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.3);color:white;font-size:20px;font-weight:900;cursor:pointer;pointer-events:auto">◀</button>
+          <button id="cr-btn-jump" style="width:70px;height:70px;border-radius:50%;background:rgba(0,212,255,.25);border:2px solid rgba(0,212,255,.5);color:white;font-size:18px;font-weight:900;cursor:pointer;pointer-events:auto">▲</button>
+          <button id="cr-btn-right" style="width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.3);color:white;font-size:20px;font-weight:900;cursor:pointer;pointer-events:auto">▶</button>
+        </div>
+      </div>
+    </div>
   </div>
-  <style>
-
-        #page-chess3d .c3d-wrap { margin: 0; overflow: hidden; font-family: sans-serif; background: #000; color: white; touch-action: none; }
-        #page-chess3d canvas { display: block; width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; z-index: 1; }
-        
-        #board-2d-container { 
-            position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; 
-            background: radial-gradient(circle, #111 0%, #000 100%); visibility: hidden; opacity: 0; transition: opacity 0.3s;
-        }
-        #board-2d { 
-            display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); 
-            width: 85vmin; height: 85vmin; border: 8px solid #222; border-radius: 8px; box-shadow: 0 0 50px rgba(0,0,0,0.5);
-        }
-        .sq-2d { display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.1s; position: relative; }
-        .sq-2d img { width: 85%; height: 85%; pointer-events: none; user-select: none; z-index: 2; }
-        .highlight-2d { box-shadow: inset 0 0 0 4px #3b82f6; z-index: 5; background: rgba(59,130,246,0.3) !important; }
-
-        .ui-overlay { position: relative; z-index: 50; pointer-events: none; width: 100vw; height: 100vh; display: flex; flex-direction: column; padding: 1.5rem; }
-        .pointer-events-auto { pointer-events: auto; }
-        .glass { background: rgba(0,0,0,0.85); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 8px 32px rgba(0,0,0,0.8); }
-        
-        #eval-wrapper { width: 12px; height: 350px; position: absolute; left: 25px; top: 50%; transform: translateY(-50%); z-index: 60; transition: all 0.3s; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-        #eval-container { width: 100%; height: 100%; background: #222; border-radius: 20px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); position: relative; }
-        #eval-fill { width: 100%; height: 50%; background: #fff; position: absolute; bottom: 0; transition: height 1s cubic-bezier(0.16, 1, 0.3, 1); }
-        
-        .ui-hidden { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
-        
-        #floating-title {
-            position: fixed; top: 10%; left: 50%; transform: translateX(-50%); z-index: 2;
-            font-size: 8vw; font-weight: 900; letter-spacing: -0.05em; opacity: 0.15;
-            text-transform: uppercase; color: #fff; filter: blur(4px); pointer-events: none;
-            transition: opacity 0.5s ease;
-        }
-
-        .glass::-webkit-scrollbar { width: 4px; }
-        .glass::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
-        select option { background: #111; color: white; }
-    
-  </style>
-  <div class="c3d-wrap" style="position:relative;width:100%;min-height:600px">
-<div id="floating-title">Chess64</div>
-
-<div id="eval-wrapper" class="eval-component">
-    <div id="eval-val-top" class="text-[10px] font-mono font-bold text-white mb-1">0.0</div>
-    <div id="eval-container">
-        <div id="eval-fill"></div>
-    </div>
 </div>
 
-<div id="board-2d-container" class="pointer-events-auto">
-    <div id="board-2d"></div>
-</div>
 
-<div class="ui-overlay">
-    <div class="flex justify-between items-start w-full">
-        <div class="glass p-4 rounded-2xl pointer-events-auto toggle-ui">
-            <h1 class="text-xl font-black tracking-tighter uppercase leading-none italic text-white">Chess64 <span id="glare-text" class="text-blue-500">PRO</span></h1>
-            <div id="game-status" class="text-[9px] text-blue-400 font-bold uppercase mt-1 tracking-widest">Engine Ready</div>
-        </div>
-
-        <div class="flex gap-2 pointer-events-auto">
-            <button id="best-move-toggle" class="glass px-5 py-2.5 rounded-xl text-[10px] font-bold uppercase hover:bg-white/10 transition">Best Move: On</button>
-            <button id="toggle-eval" class="glass px-5 py-2.5 rounded-xl text-[10px] font-bold uppercase hover:bg-white/10 transition">Hide Eval</button>
-            <button id="toggle-ui-btn" class="glass px-5 py-2.5 rounded-xl text-[10px] font-bold uppercase hover:bg-white/10 transition">Hide UI</button>
-        </div>
+<!-- City Dash game panel (inside page-tilted) -->
+<div id="city-dash-panel" style="display:none">
+  <div class="container">
+    <div style="display:flex;gap:8px;padding:10px 0;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="cityDashHide()">← Back to Tilted?</button>
+      <button class="btn btn-ghost btn-sm" onclick="navTo('home')">← Chess64 Home</button>
+      <span style="font-size:11px;color:var(--text2);margin-left:auto">← → Dodge · ↑ Jump · Double-tap to double-jump</span>
     </div>
-
-    <div class="flex flex-col gap-3 items-end mt-4 toggle-ui">
-        <div class="glass p-5 rounded-3xl pointer-events-auto w-80 space-y-4 max-h-[85vh] overflow-y-auto">
-            
-            <!-- Mode Selection -->
-            <div class="p-3 bg-white/5 rounded-2xl border border-white/5 space-y-3">
-                <div class="flex flex-col">
-                    <label class="text-[8px] font-black opacity-40 uppercase mb-1">Active Game Mode</label>
-                    <select id="game-mode" class="bg-white/5 border border-white/10 text-white text-[11px] rounded-xl p-2 outline-none">
-                        <option value="analyze">Free Analysis</option>
-                        <option value="play">Vs Computer</option>
-                        <option value="comp-vs-comp">Computer vs Computer</option>
-                    </select>
-                </div>
-
-                <!-- White Settings (Only for CVV) -->
-                <div id="white-settings" class="hidden space-y-2 pt-2 border-t border-white/5">
-                    <label class="text-[8px] font-black text-blue-400 uppercase">White Engine</label>
-                    <div class="grid grid-cols-2 gap-2">
-                        <select id="w-comp-level" class="bg-white/5 border border-white/10 text-white text-[10px] rounded-lg p-1.5 outline-none">
-                            <!-- Populated via script -->
-                        </select>
-                        <select id="w-comp-style" class="bg-white/5 border border-white/10 text-white text-[10px] rounded-lg p-1.5 outline-none">
-                            <option value="Solid">Solid</option>
-                            <option value="Aggressive">Aggressive</option>
-                            <option value="Positional">Positional</option>
-                            <option value="Gambiteer">Gambiteer</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Black Settings (Shared or CVV) -->
-                <div id="black-settings" class="space-y-2 pt-2 border-t border-white/5">
-                    <label id="comp-label" class="text-[8px] font-black text-red-400 uppercase">Computer (Black)</label>
-                    <div class="grid grid-cols-2 gap-2">
-                        <select id="comp-level" class="bg-white/5 border border-white/10 text-white text-[10px] rounded-lg p-1.5 outline-none">
-                            <!-- Populated via script -->
-                        </select>
-                        <select id="comp-style" class="bg-white/5 border border-white/10 text-white text-[10px] rounded-lg p-1.5 outline-none">
-                            <option value="Solid">Solid</option>
-                            <option value="Aggressive">Aggressive</option>
-                            <option value="Positional">Positional</option>
-                            <option value="Gambiteer">Gambiteer</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <div id="best-move-box" class="p-3 bg-blue-500/10 rounded-2xl border border-blue-500/20 flex justify-between items-center">
-                <span class="text-[9px] font-black uppercase text-blue-400">Best Move</span>
-                <span id="best-move-val" class="font-mono text-sm font-bold text-white">Calculating...</span>
-            </div>
-
-            <!-- Appearance Controls -->
-            <div class="grid grid-cols-2 gap-3">
-                <div class="flex flex-col">
-                    <label class="text-[8px] font-black opacity-40 uppercase mb-1">View</label>
-                    <select id="view-mode" class="bg-white/5 border border-white/10 text-white text-[11px] rounded-xl p-2 outline-none">
-                        <option value="3d">Real 3D</option>
-                        <option value="2d">Modern 2D</option>
-                    </select>
-                </div>
-                <div class="flex flex-col">
-                    <label class="text-[8px] font-black opacity-40 uppercase mb-1">Theme</label>
-                    <select id="board-select" class="bg-white/5 border border-white/10 text-white text-[11px] rounded-xl p-2 outline-none">
-                        <option value="midnight">Obsidian</option>
-                        <option value="wood">Walnut</option>
-                        <option value="marble">Emerald</option>
-                        <option value="cyber">Cyberpunk</option>
-                    </select>
-                </div>
-            </div>
-
-            <!-- Enhanced Toggles & Styles -->
-            <div class="grid grid-cols-2 gap-3">
-                <div class="flex flex-col">
-                    <label class="text-[8px] font-black opacity-40 uppercase mb-1">Animation</label>
-                    <select id="anim-toggle" class="bg-white/5 border border-white/10 text-white text-[11px] rounded-xl p-2 outline-none">
-                        <option value="true">Enabled</option>
-                        <option value="false">Off</option>
-                    </select>
-                </div>
-                <div class="flex flex-col">
-                    <label class="text-[8px] font-black opacity-40 uppercase mb-1">Material</label>
-                    <select id="mat-select" class="bg-white/5 border border-white/10 text-white text-[11px] rounded-xl p-2 outline-none">
-                        <option value="plastic">Matte</option>
-                        <option value="metallic">Metallic</option>
-                        <option value="glass">Glass</option>
-                        <option value="neon">Neon Glo</option>
-                        <option value="gold">Luxury Gold</option>
-                        <option value="carbon">Carbon Fiber</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-3">
-                <div class="flex flex-col">
-                    <label class="text-[8px] font-black opacity-40 uppercase mb-1">BG Text</label>
-                    <select id="bg-text-toggle" class="bg-white/5 border border-white/10 text-white text-[11px] rounded-xl p-2 outline-none">
-                        <option value="true">Visible</option>
-                        <option value="false">Hidden</option>
-                    </select>
-                </div>
-                <div class="flex flex-col">
-                    <label class="text-[8px] font-black opacity-40 uppercase mb-1">Glare Color</label>
-                    <select id="glare-toggle" class="bg-white/5 border border-white/10 text-white text-[11px] rounded-xl p-2 outline-none">
-                        <option value="blue">Electric Blue</option>
-                        <option value="red">Ruby Red</option>
-                        <option value="green">Acid Green</option>
-                        <option value="gold">Solar Gold</option>
-                        <option value="off">Disabled</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-3">
-                <div class="flex flex-col">
-                    <label class="text-[8px] font-black opacity-40 uppercase mb-1">Sound</label>
-                    <select id="sound-select" class="bg-white/5 border border-white/10 text-white text-[11px] rounded-xl p-2 outline-none">
-                        <option value="true">On</option>
-                        <option value="false">Off</option>
-                    </select>
-                </div>
-                <div class="flex flex-col">
-                    <label class="text-[8px] font-black opacity-40 uppercase mb-1">User Side</label>
-                    <select id="side-select" class="bg-white/5 border border-white/10 text-white text-[11px] rounded-xl p-2 outline-none">
-                        <option value="w">White</option>
-                        <option value="b">Black</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="pt-2 space-y-2">
-                <button id="copy-pgn" class="w-full bg-blue-500 hover:bg-blue-600 text-white text-[10px] font-bold py-3 rounded-xl uppercase transition shadow-lg shadow-blue-500/20">Copy PGN</button>
-                <div class="grid grid-cols-2 gap-2">
-                    <button id="flip-btn" class="bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] font-bold py-3 rounded-xl uppercase transition">Rotate</button>
-                    <button id="reset-btn" class="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-500 text-[10px] font-bold py-3 rounded-xl uppercase transition">Reset</button>
-                </div>
-            </div>
-        </div>
+    <div id="cr-wrap" style="position:relative;width:100%;height:500px;background:#050a12;border-radius:12px;overflow:hidden">
+      <!-- HUD -->
+      <div style="position:absolute;top:0;left:0;width:100%;padding:16px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;z-index:10;box-sizing:border-box">
+        <div id="cr-score" style="font-size:22px;font-weight:900;color:#fff;text-shadow:0 0 12px rgba(0,212,255,.6)">SCORE: 0</div>
+        <div id="cr-hi" style="font-size:16px;font-weight:700;color:#60a5fa">BEST: 0</div>
+      </div>
+      <!-- Powerup message -->
+      <div id="cr-powerup-msg" style="position:absolute;top:18%;left:50%;transform:translateX(-50%);font-size:26px;font-weight:900;color:#fff;text-shadow:0 0 20px currentColor;z-index:20;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap"></div>
+      <!-- Shield ring -->
+      <div id="cr-shield-ring" style="display:none;position:absolute;top:50%;left:50%;width:120px;height:120px;margin:-60px 0 0 -60px;border:3px solid #38bdf8;border-radius:50%;z-index:15;pointer-events:none;box-shadow:0 0 20px #38bdf8,inset 0 0 20px rgba(56,189,248,.3)"></div>
+      <!-- Start overlay -->
+      <div id="cr-overlay" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(5,10,18,.88);z-index:30">
+        <div style="font-size:3rem;font-weight:900;margin-bottom:.5rem;background:linear-gradient(135deg,#00d4ff,#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent" id="cr-title">CITY DASH</div>
+        <div id="cr-msg" style="color:#94a3b8;margin-bottom:.5rem;font-size:1rem"></div>
+        <div id="cr-final-score" style="color:#fbbf24;font-size:1.2rem;font-weight:700;margin-bottom:1.5rem"></div>
+        <button id="cr-start" style="padding:12px 36px;font-size:1.1rem;font-weight:700;border:none;border-radius:10px;cursor:pointer;background:linear-gradient(135deg,#00d4ff,#3b82f6);color:white;transition:transform .15s;box-shadow:0 0 24px rgba(0,212,255,.4)">▶ Start Run</button>
+        <p style="color:#4b5563;font-size:12px;margin-top:16px">← → to dodge · ↑ or Space to jump · Double jump available!</p>
+      </div>
+      <!-- Mobile controls -->
+      <div style="position:absolute;bottom:16px;left:0;right:0;display:flex;justify-content:space-between;padding:0 20px;z-index:20;pointer-events:none">
+        <button id="cr-btn-left" style="width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.3);color:white;font-size:20px;font-weight:900;cursor:pointer;pointer-events:auto;-webkit-tap-highlight-color:transparent">◀</button>
+        <button id="cr-btn-jump" style="width:70px;height:70px;border-radius:50%;background:rgba(0,212,255,.25);border:2px solid rgba(0,212,255,.5);color:white;font-size:18px;font-weight:900;cursor:pointer;pointer-events:auto;-webkit-tap-highlight-color:transparent">▲</button>
+        <button id="cr-btn-right" style="width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.3);color:white;font-size:20px;font-weight:900;cursor:pointer;pointer-events:auto;-webkit-tap-highlight-color:transparent">▶</button>
+      </div>
     </div>
-
-    <div class="mt-auto flex justify-center w-full pb-8 toggle-ui">
-        <div class="glass px-10 py-5 rounded-full flex gap-12 text-[10px] font-black uppercase tracking-widest pointer-events-auto">
-            <button id="undo-btn" class="hover:text-blue-500 transition">Undo</button>
-            <button id="cam-reset-btn" class="opacity-60">Recenter</button>
-        </div>
-    </div>
-</div>
-
-<script>
-// --- AUDIO SYSTEM ---
-const AudioSystem = {
-    ctx: null,
-    enabled: true,
-    init() { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
-    playMove() {
-        if (!this.enabled || !this.ctx) return;
-        if (this.ctx.state === 'suspended') this.ctx.resume();
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(160, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(45, this.ctx.currentTime + 0.12);
-        gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.15);
-        osc.connect(gain); gain.connect(this.ctx.destination);
-        osc.start(); osc.stop(this.ctx.currentTime + 0.15);
-    }
-};
-
-// --- CORE STATE ---
-const game = new Chess();
-let scene, camera, renderer, raycaster, mouse, rimLight;
-let pieces3D = {}; 
-let boardGroup = new THREE.Group();
-let stockfish;
-let isEngineLoaded = false;
-let currentMode = 'analyze'; 
-let userColor = 'w';
-let boardTheme = 'midnight';
-let selectedSquare = null;
-let currentMatType = 'plastic';
-let useAnimations = true;
-let bestMoveEnabled = true;
-
-// Interaction state
-let isDragging = false, dragThreshold = false;
-let startMousePos = { x: 0, y: 0 };
-let prevMousePos = { x: 0, y: 0 };
-let theta = Math.PI/2, phi = Math.PI/3, radius = 14;
-let targetTheta = Math.PI/2, targetPhi = Math.PI/3;
-
-const THEMES = {
-    wood: { light: 0xeedcb3, dark: 0x7a503a, rim: 0x4a2e1f, b2d: ['#eedcb3', '#7a503a'] },
-    midnight: { light: 0x444444, dark: 0x111111, rim: 0x000000, b2d: ['#333', '#111'] },
-    marble: { light: 0xfafafa, dark: 0x22c55e, rim: 0x166534, b2d: ['#eee', '#166534'] },
-    cyber: { light: 0x00f3ff, dark: 0x001a1a, rim: 0x000000, b2d: ['#00f3ff', '#001a1a'] }
-};
-
-const PIECE_IMAGES = {
-    w: { p: 'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg', r: 'https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg', n: 'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg', b: 'https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg', q: 'https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg', k: 'https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg' },
-    b: { p: 'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg', r: 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg', n: 'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg', b: 'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg', q: 'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg', k: 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg' }
-};
-
-const GLARE_COLORS = {
-    blue: '#3b82f6',
-    red: '#ef4444',
-    green: '#22c55e',
-    gold: '#f59e0b',
-    off: 'transparent'
-};
-
-// --- ENGINE ---
-async function initEngine() {
-    try {
-        const res = await fetch("https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js");
-        const blob = new Blob([await res.text()], { type: "application/javascript" });
-        stockfish = new Worker(URL.createObjectURL(blob));
-        stockfish.onmessage = (e) => {
-            const line = e.data;
-            if (line.startsWith('info depth')) {
-                const scoreMatch = line.match(/score cp (-?\d+)/);
-                const mateMatch = line.match(/score mate (-?\d+)/);
-                const pvMatch = line.match(/pv ([a-h][1-8][a-h][1-8])/);
-                if (scoreMatch) {
-                    let val = parseInt(scoreMatch[1]) / 100;
-                    if (game.turn() === 'b') val = -val;
-                    updateEval(val);
-                } else if (mateMatch) {
-                    updateEval(parseInt(mateMatch[1]) > 0 ? 10 : -10);
-                }
-                if (pvMatch && bestMoveEnabled) document.getElementById('best-move-val').innerText = pvMatch[1];
-            }
-            if (line.startsWith('bestmove')) {
-                const moveStr = line.split(' ')[1];
-                if (moveStr && moveStr !== '(none)') {
-                    const shouldMove = (currentMode === 'play' && game.turn() !== userColor) || (currentMode === 'comp-vs-comp');
-                    if (shouldMove) setTimeout(() => makeMove(moveStr), 600);
-                }
-            }
-        };
-        stockfish.postMessage("uci");
-        stockfish.postMessage("isready");
-        isEngineLoaded = true;
-        populateLevels();
-        updateView();
-    } catch (err) { console.error("Engine failed"); }
-}
-
-function populateLevels() {
-    const wLevel = document.getElementById('w-comp-level');
-    const bLevel = document.getElementById('comp-level');
-    [wLevel, bLevel].forEach(select => {
-        select.innerHTML = '';
-        for(let i=1; i<=20; i++) {
-            const opt = document.createElement('option');
-            opt.value = i;
-            opt.innerText = `Lvl ${i} ${i === 20 ? '(Stockfish)' : ''}`;
-            if(i === 5) opt.selected = true;
-            select.appendChild(opt);
-        }
-    });
-}
-
-function updateEval(val) {
-    const fill = document.getElementById('eval-fill');
-    const textTop = document.getElementById('eval-val-top');
-    let p = 50 + (val * 8); 
-    p = Math.max(2, Math.min(98, p));
-    fill.style.height = `${p}%`;
-    textTop.innerText = (val >= 0 ? '+' : '') + val.toFixed(1);
-}
-
-// --- 3D PIECES ---
-function createPieceMesh(type, color) {
-    const group = new THREE.Group();
-    const isWhite = color === 'w';
-    let baseColor = isWhite ? 0xffffff : 0x222222;
-    let mat;
-
-    if (currentMatType === 'metallic') {
-        mat = new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.2, metalness: 0.9 });
-    } else if (currentMatType === 'glass') {
-        mat = new THREE.MeshPhysicalMaterial({ color: baseColor, transmission: 0.95, opacity: 1, roughness: 0.05, thickness: 0.8, envMapIntensity: 1 });
-    } else if (currentMatType === 'neon') {
-        const neonCol = isWhite ? 0x00f3ff : 0xff00ff;
-        mat = new THREE.MeshStandardMaterial({ color: neonCol, emissive: neonCol, emissiveIntensity: 0.8 });
-    } else if (currentMatType === 'gold') {
-        mat = new THREE.MeshStandardMaterial({ color: 0xffd700, roughness: 0.1, metalness: 1 });
-    } else if (currentMatType === 'carbon') {
-        mat = new THREE.MeshStandardMaterial({ color: isWhite ? 0x444444 : 0x0a0a0a, roughness: 0.8, metalness: 0.2 });
-    } else {
-        mat = new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.6, metalness: 0 });
-    }
-
-    const add = (geo, y) => {
-        const m = new THREE.Mesh(geo, mat);
-        m.position.y = y;
-        m.castShadow = true; m.receiveShadow = true;
-        group.add(m);
-        return m;
-    };
-
-    add(new THREE.CylinderGeometry(0.38, 0.44, 0.15, 32), 0.075);
-    add(new THREE.CylinderGeometry(0.32, 0.38, 0.1, 32), 0.2);
-
-    switch(type) {
-        case 'p': add(new THREE.CylinderGeometry(0.12, 0.28, 0.6, 16), 0.4); add(new THREE.SphereGeometry(0.22, 16, 16), 0.8); break;
-        case 'r': add(new THREE.CylinderGeometry(0.25, 0.3, 0.8, 16), 0.45); add(new THREE.CylinderGeometry(0.32, 0.32, 0.25, 8), 0.95); break;
-        case 'n': add(new THREE.CylinderGeometry(0.2, 0.3, 0.4, 16), 0.3); const nH = add(new THREE.BoxGeometry(0.25, 0.6, 0.45), 0.7); nH.rotation.x = 0.4; break;
-        case 'b': add(new THREE.CylinderGeometry(0.12, 0.28, 0.9, 16), 0.5); const bH = add(new THREE.SphereGeometry(0.22, 16, 16), 1.05); bH.scale.y = 1.3; add(new THREE.SphereGeometry(0.06, 8, 8), 1.35); break;
-        case 'q': add(new THREE.CylinderGeometry(0.15, 0.3, 1.2, 16), 0.6); add(new THREE.SphereGeometry(0.28, 16, 16), 1.3); break;
-        case 'k': add(new THREE.CylinderGeometry(0.18, 0.32, 1.3, 16), 0.7); add(new THREE.BoxGeometry(0.1, 0.4, 0.1), 1.5); add(new THREE.BoxGeometry(0.3, 0.1, 0.1), 1.45); break;
-    }
-    return group;
-}
-
-function createBoard() {
-    boardGroup.clear();
-    const theme = THEMES[boardTheme];
-    const sqGeo = new THREE.BoxGeometry(1, 0.15, 1);
-    for (let r=0; r<8; r++) {
-        for (let c=0; c<8; c++) {
-            const sq = String.fromCharCode(97+c) + (8-r);
-            const mat = new THREE.MeshStandardMaterial({ color: (r+c)%2===0 ? theme.light : theme.dark, roughness: 0.4 });
-            const m = new THREE.Mesh(sqGeo, mat);
-            m.position.set(c-3.5, 0, r-3.5);
-            m.userData = { square: sq };
-            m.receiveShadow = true;
-            boardGroup.add(m);
-        }
-    }
-    scene.add(boardGroup);
-}
-
-function updateView() {
-    const board = game.board();
-    const active = {};
-    for (let r=0; r<8; r++) {
-        for (let c=0; c<8; c++) if (board[r][c]) active[String.fromCharCode(97+c)+(8-r)] = board[r][c];
-    }
-
-    // Identify and remove pieces no longer on board
-    for (let sq in pieces3D) {
-        if (!active[sq] || pieces3D[sq].type !== active[sq].type || pieces3D[sq].color !== active[sq].color) {
-            // Only remove if not currently in a transition/animation state
-            if (!pieces3D[sq].isAnimating) {
-                scene.remove(pieces3D[sq].mesh);
-                delete pieces3D[sq];
-            }
-        }
-    }
-
-    // Add or verify pieces
-    for (let sq in active) {
-        if (!pieces3D[sq]) {
-            const mesh = createPieceMesh(active[sq].type, active[sq].color);
-            const c = sq.charCodeAt(0)-97, r = 8-parseInt(sq[1]);
-            mesh.position.set(c-3.5, 0.08, r-3.5);
-            scene.add(mesh);
-            pieces3D[sq] = { ...active[sq], mesh, isAnimating: false };
-        }
-    }
-
-    boardGroup.children.forEach(m => {
-        if (!m.userData.square) return;
-        m.material.emissive.setHex(m.userData.square === selectedSquare ? 0x3b82f6 : 0x000000);
-        m.material.emissiveIntensity = 0.5;
-    });
-
-    update2D();
-
-    if (isEngineLoaded) { 
-        stockfish.postMessage(`position fen ${game.fen()}`);
-        const turn = game.turn();
-        const skill = turn === 'w' ? document.getElementById('w-comp-level').value : document.getElementById('comp-level').value;
-        const style = turn === 'w' ? document.getElementById('w-comp-style').value : document.getElementById('comp-style').value;
-        
-        if (style === 'Aggressive') stockfish.postMessage("setoption name Contempt value 100");
-        else if (style === 'Gambiteer') stockfish.postMessage("setoption name Contempt value 50");
-        else stockfish.postMessage("setoption name Contempt value 0");
-        
-        stockfish.postMessage(`setoption name Skill Level value ${skill}`);
-        stockfish.postMessage("go depth 12");
-    }
-}
-
-function update2D() {
-    const container = document.getElementById('board-2d');
-    if (!container) return;
-    container.innerHTML = '';
-    const theme = THEMES[boardTheme];
-    const isBlack = userColor === 'b';
-    for (let i=0; i<64; i++) {
-        const r = isBlack ? Math.floor(i/8) : 7 - Math.floor(i/8);
-        const c = isBlack ? 7 - (i%8) : i%8;
-        const sq = String.fromCharCode(97+c) + (r+1);
-        const piece = game.get(sq);
-        const div = document.createElement('div');
-        div.className = `sq-2d ${selectedSquare === sq ? 'highlight-2d' : ''}`;
-        div.style.background = (r+c)%2!==0 ? theme.b2d[0] : theme.b2d[1];
-        if (piece) {
-            const img = document.createElement('img');
-            img.src = PIECE_IMAGES[piece.color][piece.type];
-            div.appendChild(img);
-        }
-        div.onclick = () => handleSquare(sq);
-        container.appendChild(div);
-    }
-}
-
-function animatePieceMove(from, to, pieceData, callback) {
-    const cFrom = from.charCodeAt(0)-97, rFrom = 8-parseInt(from[1]);
-    const cTo = to.charCodeAt(0)-97, rTo = 8-parseInt(to[1]);
-    const startPos = new THREE.Vector3(cFrom-3.5, 0.08, rFrom-3.5);
-    const endPos = new THREE.Vector3(cTo-3.5, 0.08, rTo-3.5);
-    const duration = 300, startTime = performance.now();
-    pieceData.isAnimating = true;
-
-    function step() {
-        const progress = Math.min((performance.now() - startTime) / duration, 1);
-        const ease = 1 - Math.pow(1 - progress, 3);
-        const currentPos = new THREE.Vector3().lerpVectors(startPos, endPos, ease);
-        currentPos.y = 0.08 + Math.sin(progress * Math.PI) * 0.4;
-        pieceData.mesh.position.copy(currentPos);
-        if (progress < 1) requestAnimationFrame(step);
-        else {
-            pieceData.isAnimating = false;
-            AudioSystem.playMove();
-            if (callback) callback();
-        }
-    }
-    requestAnimationFrame(step);
-}
-
-function makeMove(moveObj) {
-    // Before moving, find if we're capturing something to remove it immediately in 3D
-    const targetSquare = typeof moveObj === 'string' ? moveObj.slice(-2) : moveObj.to;
-    const fromSquare = typeof moveObj === 'string' ? moveObj.slice(0, 2) : moveObj.from;
-
-    const move = game.move(moveObj, { sloppy: true });
-    if (!move) return false;
-
-    const is2DActive = document.getElementById('board-2d-container').style.visibility === 'visible';
-    
-    // Explicit removal of captured piece mesh to prevent "shadows"
-    if (pieces3D[targetSquare] && pieces3D[targetSquare].mesh) {
-        scene.remove(pieces3D[targetSquare].mesh);
-        delete pieces3D[targetSquare];
-    }
-
-    if (useAnimations && !is2DActive) {
-        const piece = pieces3D[fromSquare];
-        if (piece) {
-            pieces3D[move.to] = piece;
-            delete pieces3D[fromSquare];
-            animatePieceMove(move.from, move.to, piece, () => updateView());
-        } else { AudioSystem.playMove(); updateView(); }
-    } else { AudioSystem.playMove(); updateView(); }
-    return true;
-}
-
-function handleSquare(sq) {
-    if (currentMode === 'play' && game.turn() !== userColor) return;
-    if (currentMode === 'comp-vs-comp') return;
-
-    if (selectedSquare) {
-        if (selectedSquare === sq) { selectedSquare = null; updateView(); return; }
-        const success = makeMove({ from: selectedSquare, to: sq, promotion: 'q' });
-        selectedSquare = success ? null : (game.get(sq) && (currentMode === 'analyze' || game.get(sq).color === game.turn()) ? sq : null);
-    } else {
-        const p = game.get(sq);
-        if (p && (currentMode === 'analyze' || p.color === game.turn())) selectedSquare = sq;
-    }
-    updateView();
-}
-
-function init3D() {
-    scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(40, window.innerWidth/window.innerHeight, 0.1, 1000);
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = true;
-    document.body.appendChild(renderer.domElement);
-
-    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-    const spot = new THREE.SpotLight(0xffffff, 0.8);
-    spot.position.set(5, 15, 5);
-    spot.castShadow = true;
-    scene.add(spot);
-
-    rimLight = new THREE.PointLight(0x3b82f6, 1.2, 30);
-    rimLight.position.set(-10, 8, -10);
-    scene.add(rimLight);
-
-    raycaster = new THREE.Raycaster();
-    mouse = new THREE.Vector2();
-
-    createBoard();
-    setupInteraction();
-    animate();
-}
-
-function setupInteraction() {
-    const el = renderer.domElement;
-    const onDown = (e) => { 
-        isDragging = true; 
-        const p = e.touches ? e.touches[0] : e; 
-        startMousePos = { x: p.clientX, y: p.clientY }; 
-        prevMousePos = { ...startMousePos }; 
-        if (AudioSystem.ctx === null) AudioSystem.init();
-    };
-    const onMove = (e) => {
-        if (!isDragging) return;
-        const p = e.touches ? e.touches[0] : e;
-        const dx = p.clientX - prevMousePos.x, dy = p.clientY - prevMousePos.y;
-        if (Math.abs(p.clientX - startMousePos.x) > 5 || Math.abs(p.clientY - startMousePos.y) > 5) dragThreshold = true;
-        targetTheta -= dx * 0.007; targetPhi = Math.max(0.1, Math.min(Math.PI/2 - 0.1, targetPhi + dy * 0.007));
-        prevMousePos = { x: p.clientX, y: p.clientY };
-    };
-    const onUp = (e) => {
-        if (isDragging && !dragThreshold) {
-            const p = e.changedTouches ? e.changedTouches[0] : e;
-            mouse.x = (p.clientX / window.innerWidth) * 2 - 1; mouse.y = -(p.clientY / window.innerHeight) * 2 + 1;
-            raycaster.setFromCamera(mouse, camera);
-            const hits = raycaster.intersectObjects(boardGroup.children);
-            if (hits.length > 0) handleSquare(hits[0].object.userData.square);
-        }
-        isDragging = false; dragThreshold = false;
-    };
-    el.addEventListener('mousedown', onDown); window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
-    el.addEventListener('touchstart', onDown); window.addEventListener('touchmove', onMove); window.addEventListener('touchend', onUp);
-}
-
-function animate() {
-    requestAnimationFrame(animate);
-    theta += (targetTheta - theta) * 0.1; phi += (targetPhi - phi) * 0.1;
-    camera.position.set(radius * Math.sin(phi) * Math.cos(theta), radius * Math.cos(phi), radius * Math.sin(phi) * Math.sin(theta));
-    camera.lookAt(0, 0, 0);
-    for (let sq in pieces3D) {
-        if (pieces3D[sq].isAnimating) continue;
-        const c = sq.charCodeAt(0)-97, r = 8-parseInt(sq[1]);
-        pieces3D[sq].mesh.position.x += (c - 3.5 - pieces3D[sq].mesh.position.x) * 0.2;
-        pieces3D[sq].mesh.position.z += (r - 3.5 - pieces3D[sq].mesh.position.z) * 0.2;
-    }
-    renderer.render(scene, camera);
-}
-
-// --- LISTENERS ---
-document.getElementById('view-mode').onchange = (e) => {
-    const is2d = e.target.value === '2d';
-    document.getElementById('board-2d-container').style.visibility = is2d ? 'visible' : 'hidden';
-    document.getElementById('board-2d-container').style.opacity = is2d ? '1' : '0';
-};
-document.getElementById('board-select').onchange = (e) => { boardTheme = e.target.value; createBoard(); updateView(); };
-document.getElementById('side-select').onchange = (e) => { userColor = e.target.value; targetTheta = userColor === 'w' ? Math.PI/2 : -Math.PI/2; updateView(); };
-document.getElementById('best-move-toggle').onclick = (e) => {
-    bestMoveEnabled = !bestMoveEnabled;
-    document.getElementById('best-move-box').classList.toggle('ui-hidden');
-    e.target.innerText = `Best Move: ${bestMoveEnabled ? 'On' : 'Off'}`;
-};
-document.getElementById('anim-toggle').onchange = (e) => { useAnimations = e.target.value === 'true'; };
-document.getElementById('mat-select').onchange = (e) => { currentMatType = e.target.value; pieces3D = {}; updateView(); };
-document.getElementById('bg-text-toggle').onchange = (e) => { document.getElementById('floating-title').style.opacity = e.target.value === 'true' ? '0.15' : '0'; };
-document.getElementById('glare-toggle').onchange = (e) => { 
-    const col = GLARE_COLORS[e.target.value];
-    const glareText = document.getElementById('glare-text');
-    glareText.style.color = col;
-    glareText.style.opacity = col === 'transparent' ? '0' : '1';
-    if(rimLight) rimLight.color.set(col === 'transparent' ? 0xffffff : col);
-};
-
-document.getElementById('game-mode').onchange = (e) => {
-    currentMode = e.target.value;
-    document.getElementById('white-settings').classList.toggle('hidden', currentMode !== 'comp-vs-comp');
-    document.getElementById('comp-label').innerText = currentMode === 'comp-vs-comp' ? 'Black Engine' : 'Computer';
-    document.getElementById('game-status').innerText = currentMode.toUpperCase().replace(/-/g, ' ');
-    updateView();
-};
-document.getElementById('copy-pgn').onclick = () => {
-    const pgn = game.pgn();
-    const el = document.createElement('textarea');
-    el.value = pgn || "No moves played."; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
-    const btn = document.getElementById('copy-pgn'); const old = btn.innerText; btn.innerText = "COPIED!"; setTimeout(() => btn.innerText = old, 1000);
-};
-
-document.getElementById('undo-btn').onclick = () => { game.undo(); if(currentMode==='play') game.undo(); updateView(); };
-document.getElementById('reset-btn').onclick = () => { game.reset(); updateView(); };
-document.getElementById('cam-reset-btn').onclick = () => { targetTheta = userColor === 'w' ? Math.PI/2 : -Math.PI/2; targetPhi = Math.PI/3; radius = 14; };
-document.getElementById('flip-btn').onclick = () => { targetTheta += Math.PI; };
-document.getElementById('toggle-ui-btn').onclick = () => document.querySelectorAll('.toggle-ui').forEach(el => el.classList.toggle('ui-hidden'));
-document.getElementById('toggle-eval').onclick = (e) => {
-    const isHidden = document.getElementById('eval-wrapper').classList.toggle('ui-hidden');
-    e.target.innerText = isHidden ? "Show Eval" : "Hide Eval";
-};
-document.getElementById('sound-select').onchange = (e) => { AudioSystem.enabled = e.target.value === 'true'; };
-
-window.onload = () => { init3D(); initEngine(); };
-window.onresize = () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); };
-</script>
   </div>
-  <script>
-
-// --- AUDIO SYSTEM ---
-const AudioSystem = {
-    ctx: null,
-    enabled: true,
-    init() { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
-    playMove() {
-        if (!this.enabled || !this.ctx) return;
-        if (this.ctx.state === 'suspended') this.ctx.resume();
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(160, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(45, this.ctx.currentTime + 0.12);
-        gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.15);
-        osc.connect(gain); gain.connect(this.ctx.destination);
-        osc.start(); osc.stop(this.ctx.currentTime + 0.15);
-    }
-};
-
-// --- CORE STATE ---
-const game = new Chess();
-let scene, camera, renderer, raycaster, mouse, rimLight;
-let pieces3D = {}; 
-let boardGroup = new THREE.Group();
-let stockfish;
-let isEngineLoaded = false;
-let currentMode = 'analyze'; 
-let userColor = 'w';
-let boardTheme = 'midnight';
-let selectedSquare = null;
-let currentMatType = 'plastic';
-let useAnimations = true;
-let bestMoveEnabled = true;
-
-// Interaction state
-let isDragging = false, dragThreshold = false;
-let startMousePos = { x: 0, y: 0 };
-let prevMousePos = { x: 0, y: 0 };
-let theta = Math.PI/2, phi = Math.PI/3, radius = 14;
-let targetTheta = Math.PI/2, targetPhi = Math.PI/3;
-
-const THEMES = {
-    wood: { light: 0xeedcb3, dark: 0x7a503a, rim: 0x4a2e1f, b2d: ['#eedcb3', '#7a503a'] },
-    midnight: { light: 0x444444, dark: 0x111111, rim: 0x000000, b2d: ['#333', '#111'] },
-    marble: { light: 0xfafafa, dark: 0x22c55e, rim: 0x166534, b2d: ['#eee', '#166534'] },
-    cyber: { light: 0x00f3ff, dark: 0x001a1a, rim: 0x000000, b2d: ['#00f3ff', '#001a1a'] }
-};
-
-const PIECE_IMAGES = {
-    w: { p: 'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg', r: 'https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg', n: 'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg', b: 'https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg', q: 'https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg', k: 'https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg' },
-    b: { p: 'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg', r: 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg', n: 'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg', b: 'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg', q: 'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg', k: 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg' }
-};
-
-const GLARE_COLORS = {
-    blue: '#3b82f6',
-    red: '#ef4444',
-    green: '#22c55e',
-    gold: '#f59e0b',
-    off: 'transparent'
-};
-
-// --- ENGINE ---
-async function initEngine() {
-    try {
-        const res = await fetch("https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js");
-        const blob = new Blob([await res.text()], { type: "application/javascript" });
-        stockfish = new Worker(URL.createObjectURL(blob));
-        stockfish.onmessage = (e) => {
-            const line = e.data;
-            if (line.startsWith('info depth')) {
-                const scoreMatch = line.match(/score cp (-?\d+)/);
-                const mateMatch = line.match(/score mate (-?\d+)/);
-                const pvMatch = line.match(/pv ([a-h][1-8][a-h][1-8])/);
-                if (scoreMatch) {
-                    let val = parseInt(scoreMatch[1]) / 100;
-                    if (game.turn() === 'b') val = -val;
-                    updateEval(val);
-                } else if (mateMatch) {
-                    updateEval(parseInt(mateMatch[1]) > 0 ? 10 : -10);
-                }
-                if (pvMatch && bestMoveEnabled) document.getElementById('best-move-val').innerText = pvMatch[1];
-            }
-            if (line.startsWith('bestmove')) {
-                const moveStr = line.split(' ')[1];
-                if (moveStr && moveStr !== '(none)') {
-                    const shouldMove = (currentMode === 'play' && game.turn() !== userColor) || (currentMode === 'comp-vs-comp');
-                    if (shouldMove) setTimeout(() => makeMove(moveStr), 600);
-                }
-            }
-        };
-        stockfish.postMessage("uci");
-        stockfish.postMessage("isready");
-        isEngineLoaded = true;
-        populateLevels();
-        updateView();
-    } catch (err) { console.error("Engine failed"); }
-}
-
-function populateLevels() {
-    const wLevel = document.getElementById('w-comp-level');
-    const bLevel = document.getElementById('comp-level');
-    [wLevel, bLevel].forEach(select => {
-        select.innerHTML = '';
-        for(let i=1; i<=20; i++) {
-            const opt = document.createElement('option');
-            opt.value = i;
-            opt.innerText = `Lvl ${i} ${i === 20 ? '(Stockfish)' : ''}`;
-            if(i === 5) opt.selected = true;
-            select.appendChild(opt);
-        }
-    });
-}
-
-function updateEval(val) {
-    const fill = document.getElementById('eval-fill');
-    const textTop = document.getElementById('eval-val-top');
-    let p = 50 + (val * 8); 
-    p = Math.max(2, Math.min(98, p));
-    fill.style.height = `${p}%`;
-    textTop.innerText = (val >= 0 ? '+' : '') + val.toFixed(1);
-}
-
-// --- 3D PIECES ---
-function createPieceMesh(type, color) {
-    const group = new THREE.Group();
-    const isWhite = color === 'w';
-    let baseColor = isWhite ? 0xffffff : 0x222222;
-    let mat;
-
-    if (currentMatType === 'metallic') {
-        mat = new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.2, metalness: 0.9 });
-    } else if (currentMatType === 'glass') {
-        mat = new THREE.MeshPhysicalMaterial({ color: baseColor, transmission: 0.95, opacity: 1, roughness: 0.05, thickness: 0.8, envMapIntensity: 1 });
-    } else if (currentMatType === 'neon') {
-        const neonCol = isWhite ? 0x00f3ff : 0xff00ff;
-        mat = new THREE.MeshStandardMaterial({ color: neonCol, emissive: neonCol, emissiveIntensity: 0.8 });
-    } else if (currentMatType === 'gold') {
-        mat = new THREE.MeshStandardMaterial({ color: 0xffd700, roughness: 0.1, metalness: 1 });
-    } else if (currentMatType === 'carbon') {
-        mat = new THREE.MeshStandardMaterial({ color: isWhite ? 0x444444 : 0x0a0a0a, roughness: 0.8, metalness: 0.2 });
-    } else {
-        mat = new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.6, metalness: 0 });
-    }
-
-    const add = (geo, y) => {
-        const m = new THREE.Mesh(geo, mat);
-        m.position.y = y;
-        m.castShadow = true; m.receiveShadow = true;
-        group.add(m);
-        return m;
-    };
-
-    add(new THREE.CylinderGeometry(0.38, 0.44, 0.15, 32), 0.075);
-    add(new THREE.CylinderGeometry(0.32, 0.38, 0.1, 32), 0.2);
-
-    switch(type) {
-        case 'p': add(new THREE.CylinderGeometry(0.12, 0.28, 0.6, 16), 0.4); add(new THREE.SphereGeometry(0.22, 16, 16), 0.8); break;
-        case 'r': add(new THREE.CylinderGeometry(0.25, 0.3, 0.8, 16), 0.45); add(new THREE.CylinderGeometry(0.32, 0.32, 0.25, 8), 0.95); break;
-        case 'n': add(new THREE.CylinderGeometry(0.2, 0.3, 0.4, 16), 0.3); const nH = add(new THREE.BoxGeometry(0.25, 0.6, 0.45), 0.7); nH.rotation.x = 0.4; break;
-        case 'b': add(new THREE.CylinderGeometry(0.12, 0.28, 0.9, 16), 0.5); const bH = add(new THREE.SphereGeometry(0.22, 16, 16), 1.05); bH.scale.y = 1.3; add(new THREE.SphereGeometry(0.06, 8, 8), 1.35); break;
-        case 'q': add(new THREE.CylinderGeometry(0.15, 0.3, 1.2, 16), 0.6); add(new THREE.SphereGeometry(0.28, 16, 16), 1.3); break;
-        case 'k': add(new THREE.CylinderGeometry(0.18, 0.32, 1.3, 16), 0.7); add(new THREE.BoxGeometry(0.1, 0.4, 0.1), 1.5); add(new THREE.BoxGeometry(0.3, 0.1, 0.1), 1.45); break;
-    }
-    return group;
-}
-
-function createBoard() {
-    boardGroup.clear();
-    const theme = THEMES[boardTheme];
-    const sqGeo = new THREE.BoxGeometry(1, 0.15, 1);
-    for (let r=0; r<8; r++) {
-        for (let c=0; c<8; c++) {
-            const sq = String.fromCharCode(97+c) + (8-r);
-            const mat = new THREE.MeshStandardMaterial({ color: (r+c)%2===0 ? theme.light : theme.dark, roughness: 0.4 });
-            const m = new THREE.Mesh(sqGeo, mat);
-            m.position.set(c-3.5, 0, r-3.5);
-            m.userData = { square: sq };
-            m.receiveShadow = true;
-            boardGroup.add(m);
-        }
-    }
-    scene.add(boardGroup);
-}
-
-function updateView() {
-    const board = game.board();
-    const active = {};
-    for (let r=0; r<8; r++) {
-        for (let c=0; c<8; c++) if (board[r][c]) active[String.fromCharCode(97+c)+(8-r)] = board[r][c];
-    }
-
-    // Identify and remove pieces no longer on board
-    for (let sq in pieces3D) {
-        if (!active[sq] || pieces3D[sq].type !== active[sq].type || pieces3D[sq].color !== active[sq].color) {
-            // Only remove if not currently in a transition/animation state
-            if (!pieces3D[sq].isAnimating) {
-                scene.remove(pieces3D[sq].mesh);
-                delete pieces3D[sq];
-            }
-        }
-    }
-
-    // Add or verify pieces
-    for (let sq in active) {
-        if (!pieces3D[sq]) {
-            const mesh = createPieceMesh(active[sq].type, active[sq].color);
-            const c = sq.charCodeAt(0)-97, r = 8-parseInt(sq[1]);
-            mesh.position.set(c-3.5, 0.08, r-3.5);
-            scene.add(mesh);
-            pieces3D[sq] = { ...active[sq], mesh, isAnimating: false };
-        }
-    }
-
-    boardGroup.children.forEach(m => {
-        if (!m.userData.square) return;
-        m.material.emissive.setHex(m.userData.square === selectedSquare ? 0x3b82f6 : 0x000000);
-        m.material.emissiveIntensity = 0.5;
-    });
-
-    update2D();
-
-    if (isEngineLoaded) { 
-        stockfish.postMessage(`position fen ${game.fen()}`);
-        const turn = game.turn();
-        const skill = turn === 'w' ? document.getElementById('w-comp-level').value : document.getElementById('comp-level').value;
-        const style = turn === 'w' ? document.getElementById('w-comp-style').value : document.getElementById('comp-style').value;
-        
-        if (style === 'Aggressive') stockfish.postMessage("setoption name Contempt value 100");
-        else if (style === 'Gambiteer') stockfish.postMessage("setoption name Contempt value 50");
-        else stockfish.postMessage("setoption name Contempt value 0");
-        
-        stockfish.postMessage(`setoption name Skill Level value ${skill}`);
-        stockfish.postMessage("go depth 12");
-    }
-}
-
-function update2D() {
-    const container = document.getElementById('board-2d');
-    if (!container) return;
-    container.innerHTML = '';
-    const theme = THEMES[boardTheme];
-    const isBlack = userColor === 'b';
-    for (let i=0; i<64; i++) {
-        const r = isBlack ? Math.floor(i/8) : 7 - Math.floor(i/8);
-        const c = isBlack ? 7 - (i%8) : i%8;
-        const sq = String.fromCharCode(97+c) + (r+1);
-        const piece = game.get(sq);
-        const div = document.createElement('div');
-        div.className = `sq-2d ${selectedSquare === sq ? 'highlight-2d' : ''}`;
-        div.style.background = (r+c)%2!==0 ? theme.b2d[0] : theme.b2d[1];
-        if (piece) {
-            const img = document.createElement('img');
-            img.src = PIECE_IMAGES[piece.color][piece.type];
-            div.appendChild(img);
-        }
-        div.onclick = () => handleSquare(sq);
-        container.appendChild(div);
-    }
-}
-
-function animatePieceMove(from, to, pieceData, callback) {
-    const cFrom = from.charCodeAt(0)-97, rFrom = 8-parseInt(from[1]);
-    const cTo = to.charCodeAt(0)-97, rTo = 8-parseInt(to[1]);
-    const startPos = new THREE.Vector3(cFrom-3.5, 0.08, rFrom-3.5);
-    const endPos = new THREE.Vector3(cTo-3.5, 0.08, rTo-3.5);
-    const duration = 300, startTime = performance.now();
-    pieceData.isAnimating = true;
-
-    function step() {
-        const progress = Math.min((performance.now() - startTime) / duration, 1);
-        const ease = 1 - Math.pow(1 - progress, 3);
-        const currentPos = new THREE.Vector3().lerpVectors(startPos, endPos, ease);
-        currentPos.y = 0.08 + Math.sin(progress * Math.PI) * 0.4;
-        pieceData.mesh.position.copy(currentPos);
-        if (progress < 1) requestAnimationFrame(step);
-        else {
-            pieceData.isAnimating = false;
-            AudioSystem.playMove();
-            if (callback) callback();
-        }
-    }
-    requestAnimationFrame(step);
-}
-
-function makeMove(moveObj) {
-    // Before moving, find if we're capturing something to remove it immediately in 3D
-    const targetSquare = typeof moveObj === 'string' ? moveObj.slice(-2) : moveObj.to;
-    const fromSquare = typeof moveObj === 'string' ? moveObj.slice(0, 2) : moveObj.from;
-
-    const move = game.move(moveObj, { sloppy: true });
-    if (!move) return false;
-
-    const is2DActive = document.getElementById('board-2d-container').style.visibility === 'visible';
-    
-    // Explicit removal of captured piece mesh to prevent "shadows"
-    if (pieces3D[targetSquare] && pieces3D[targetSquare].mesh) {
-        scene.remove(pieces3D[targetSquare].mesh);
-        delete pieces3D[targetSquare];
-    }
-
-    if (useAnimations && !is2DActive) {
-        const piece = pieces3D[fromSquare];
-        if (piece) {
-            pieces3D[move.to] = piece;
-            delete pieces3D[fromSquare];
-            animatePieceMove(move.from, move.to, piece, () => updateView());
-        } else { AudioSystem.playMove(); updateView(); }
-    } else { AudioSystem.playMove(); updateView(); }
-    return true;
-}
-
-function handleSquare(sq) {
-    if (currentMode === 'play' && game.turn() !== userColor) return;
-    if (currentMode === 'comp-vs-comp') return;
-
-    if (selectedSquare) {
-        if (selectedSquare === sq) { selectedSquare = null; updateView(); return; }
-        const success = makeMove({ from: selectedSquare, to: sq, promotion: 'q' });
-        selectedSquare = success ? null : (game.get(sq) && (currentMode === 'analyze' || game.get(sq).color === game.turn()) ? sq : null);
-    } else {
-        const p = game.get(sq);
-        if (p && (currentMode === 'analyze' || p.color === game.turn())) selectedSquare = sq;
-    }
-    updateView();
-}
-
-function init3D() {
-    scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(40, window.innerWidth/window.innerHeight, 0.1, 1000);
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = true;
-    document.body.appendChild(renderer.domElement);
-
-    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-    const spot = new THREE.SpotLight(0xffffff, 0.8);
-    spot.position.set(5, 15, 5);
-    spot.castShadow = true;
-    scene.add(spot);
-
-    rimLight = new THREE.PointLight(0x3b82f6, 1.2, 30);
-    rimLight.position.set(-10, 8, -10);
-    scene.add(rimLight);
-
-    raycaster = new THREE.Raycaster();
-    mouse = new THREE.Vector2();
-
-    createBoard();
-    setupInteraction();
-    animate();
-}
-
-function setupInteraction() {
-    const el = renderer.domElement;
-    const onDown = (e) => { 
-        isDragging = true; 
-        const p = e.touches ? e.touches[0] : e; 
-        startMousePos = { x: p.clientX, y: p.clientY }; 
-        prevMousePos = { ...startMousePos }; 
-        if (AudioSystem.ctx === null) AudioSystem.init();
-    };
-    const onMove = (e) => {
-        if (!isDragging) return;
-        const p = e.touches ? e.touches[0] : e;
-        const dx = p.clientX - prevMousePos.x, dy = p.clientY - prevMousePos.y;
-        if (Math.abs(p.clientX - startMousePos.x) > 5 || Math.abs(p.clientY - startMousePos.y) > 5) dragThreshold = true;
-        targetTheta -= dx * 0.007; targetPhi = Math.max(0.1, Math.min(Math.PI/2 - 0.1, targetPhi + dy * 0.007));
-        prevMousePos = { x: p.clientX, y: p.clientY };
-    };
-    const onUp = (e) => {
-        if (isDragging && !dragThreshold) {
-            const p = e.changedTouches ? e.changedTouches[0] : e;
-            mouse.x = (p.clientX / window.innerWidth) * 2 - 1; mouse.y = -(p.clientY / window.innerHeight) * 2 + 1;
-            raycaster.setFromCamera(mouse, camera);
-            const hits = raycaster.intersectObjects(boardGroup.children);
-            if (hits.length > 0) handleSquare(hits[0].object.userData.square);
-        }
-        isDragging = false; dragThreshold = false;
-    };
-    el.addEventListener('mousedown', onDown); window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
-    el.addEventListener('touchstart', onDown); window.addEventListener('touchmove', onMove); window.addEventListener('touchend', onUp);
-}
-
-function animate() {
-    requestAnimationFrame(animate);
-    theta += (targetTheta - theta) * 0.1; phi += (targetPhi - phi) * 0.1;
-    camera.position.set(radius * Math.sin(phi) * Math.cos(theta), radius * Math.cos(phi), radius * Math.sin(phi) * Math.sin(theta));
-    camera.lookAt(0, 0, 0);
-    for (let sq in pieces3D) {
-        if (pieces3D[sq].isAnimating) continue;
-        const c = sq.charCodeAt(0)-97, r = 8-parseInt(sq[1]);
-        pieces3D[sq].mesh.position.x += (c - 3.5 - pieces3D[sq].mesh.position.x) * 0.2;
-        pieces3D[sq].mesh.position.z += (r - 3.5 - pieces3D[sq].mesh.position.z) * 0.2;
-    }
-    renderer.render(scene, camera);
-}
-
-// --- LISTENERS ---
-document.getElementById('view-mode').onchange = (e) => {
-    const is2d = e.target.value === '2d';
-    document.getElementById('board-2d-container').style.visibility = is2d ? 'visible' : 'hidden';
-    document.getElementById('board-2d-container').style.opacity = is2d ? '1' : '0';
-};
-document.getElementById('board-select').onchange = (e) => { boardTheme = e.target.value; createBoard(); updateView(); };
-document.getElementById('side-select').onchange = (e) => { userColor = e.target.value; targetTheta = userColor === 'w' ? Math.PI/2 : -Math.PI/2; updateView(); };
-document.getElementById('best-move-toggle').onclick = (e) => {
-    bestMoveEnabled = !bestMoveEnabled;
-    document.getElementById('best-move-box').classList.toggle('ui-hidden');
-    e.target.innerText = `Best Move: ${bestMoveEnabled ? 'On' : 'Off'}`;
-};
-document.getElementById('anim-toggle').onchange = (e) => { useAnimations = e.target.value === 'true'; };
-document.getElementById('mat-select').onchange = (e) => { currentMatType = e.target.value; pieces3D = {}; updateView(); };
-document.getElementById('bg-text-toggle').onchange = (e) => { document.getElementById('floating-title').style.opacity = e.target.value === 'true' ? '0.15' : '0'; };
-document.getElementById('glare-toggle').onchange = (e) => { 
-    const col = GLARE_COLORS[e.target.value];
-    const glareText = document.getElementById('glare-text');
-    glareText.style.color = col;
-    glareText.style.opacity = col === 'transparent' ? '0' : '1';
-    if(rimLight) rimLight.color.set(col === 'transparent' ? 0xffffff : col);
-};
-
-document.getElementById('game-mode').onchange = (e) => {
-    currentMode = e.target.value;
-    document.getElementById('white-settings').classList.toggle('hidden', currentMode !== 'comp-vs-comp');
-    document.getElementById('comp-label').innerText = currentMode === 'comp-vs-comp' ? 'Black Engine' : 'Computer';
-    document.getElementById('game-status').innerText = currentMode.toUpperCase().replace(/-/g, ' ');
-    updateView();
-};
-document.getElementById('copy-pgn').onclick = () => {
-    const pgn = game.pgn();
-    const el = document.createElement('textarea');
-    el.value = pgn || "No moves played."; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
-    const btn = document.getElementById('copy-pgn'); const old = btn.innerText; btn.innerText = "COPIED!"; setTimeout(() => btn.innerText = old, 1000);
-};
-
-document.getElementById('undo-btn').onclick = () => { game.undo(); if(currentMode==='play') game.undo(); updateView(); };
-document.getElementById('reset-btn').onclick = () => { game.reset(); updateView(); };
-document.getElementById('cam-reset-btn').onclick = () => { targetTheta = userColor === 'w' ? Math.PI/2 : -Math.PI/2; targetPhi = Math.PI/3; radius = 14; };
-document.getElementById('flip-btn').onclick = () => { targetTheta += Math.PI; };
-document.getElementById('toggle-ui-btn').onclick = () => document.querySelectorAll('.toggle-ui').forEach(el => el.classList.toggle('ui-hidden'));
-document.getElementById('toggle-eval').onclick = (e) => {
-    const isHidden = document.getElementById('eval-wrapper').classList.toggle('ui-hidden');
-    e.target.innerText = isHidden ? "Show Eval" : "Hide Eval";
-};
-document.getElementById('sound-select').onchange = (e) => { AudioSystem.enabled = e.target.value === 'true'; };
-
-window.onload = () => { init3D(); initEngine(); };
-window.onresize = () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); };
-
-  </script>
 </div>
-
-
-<script>
-/* ══ Restore saved button style on load ══════════════════════════════ */
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" id="cr-threejs"></script>
+<script id="city-dash-script">
+// ═══════════════════════════════════════════════════════════
+// City Dash 3D — A fast-paced city running game
+// ═══════════════════════════════════════════════════════════
 (function(){
-  document.addEventListener('DOMContentLoaded',function(){
-    try{
-      var saved=localStorage.getItem('c64_btn_style');
-      if(saved&&saved!=='classic') setBtnStyle(saved);
-      // Sync the selector
-      var sel=document.getElementById('btn-style-select');
-      if(sel) sel.value=saved||'classic';
-    }catch(_){}
-    // Sync piece anim toggle
-    var tap=document.getElementById('tog-pieceanim');
-    if(tap) tap.className='toggle'+(_animatePieces!==false?' on':' off');
+'use strict';
+
+const CR = {
+  paused:false, doubleJumpEnabled:true, hardMode:false, scenery:'city',
+  scene:null, camera:null, renderer:null, clock:null,
+  player:null, obstacles:[], coins:[], powerups:[],
+  speed:0.22, score:0, hiScore:0, dist:0,
+  lane:1, targetLane:1, laneX:[-3,0,3],
+  pY:0, pVY:0, onGround:true, doubleJumped:false,
+  active:false, started:false, animId:null,
+  shield:false, magnet:false, boost:false,
+  shieldT:0, magnetT:0, boostT:0,
+  spawnTimer:0, coinTimer:0, puTimer:0,
+  lastT:0, ticks:0, buildings:[],
+  GRAVITY:0.016, JUMP:0.26, DLJUMP:0.22,
+  trackZ:0, tracks:[]
+};
+
+const LANES=[-3,0,3];
+const COLORS={bldA:0x1a2a3a,bldB:0x0d1f2d,bldC:0x162030,
+              window:0x88ccff,winOn:0xffee88,road:0x1a1a1a,
+              line:0x444444,player:0x00d4ff,coin:0xffd700,
+              shield:0x38bdf8,magnet:0xf472b6,boost:0xf97316,
+              obs:0x374151,obs2:0x4b5563};
+
+function el(id){return document.getElementById(id);}
+
+function init(){
+  const wrap=el('cr-wrap');
+  if(!wrap) return;
+
+  CR.hiScore=parseInt(localStorage.getItem('crHiV2')||0);
+  if(el('cr-hi')) el('cr-hi').textContent='BEST: '+CR.hiScore;
+  if(el('cr-hi2')) el('cr-hi2').textContent='BEST: '+CR.hiScore;
+
+  // Scene
+  CR.scene=new THREE.Scene();
+  CR.scene.background=new THREE.Color(0x050a12);
+  CR.scene.fog=new THREE.Fog(0x050a12,30,90);
+
+  // Camera
+  CR.camera=new THREE.PerspectiveCamera(65,wrap.clientWidth/wrap.clientHeight,0.1,150);
+  CR.camera.position.set(0,4.5,10);
+  CR.camera.lookAt(0,2,-20);
+
+  // Renderer
+  CR.renderer=new THREE.WebGLRenderer({antialias:true});
+  CR.renderer.setSize(wrap.clientWidth,wrap.clientHeight);
+  CR.renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  CR.renderer.shadowMap.enabled=true;
+  wrap.appendChild(CR.renderer.domElement);
+
+  CR.clock=new THREE.Clock();
+
+  // Lights
+  const amb=new THREE.AmbientLight(0x223344,1.2); CR.scene.add(amb);
+  const sun=new THREE.DirectionalLight(0x8899bb,1.0);
+  sun.position.set(5,20,10); sun.castShadow=true;
+  sun.shadow.mapSize.width=1024; sun.shadow.mapSize.height=1024;
+  CR.scene.add(sun);
+  const neon1=new THREE.PointLight(0x00f3ff,3,25); neon1.position.set(-5,8,-20); CR.scene.add(neon1);
+  const neon2=new THREE.PointLight(0xff00aa,3,25); neon2.position.set(5,8,-40); CR.scene.add(neon2);
+
+  // Road
+  buildRoad();
+  // Buildings
+  buildBuildings();
+  // Player
+  buildPlayer();
+  // Tracks (initial)
+  for(let i=0;i<8;i++) spawnTrack(i*-20-40);
+
+  // Input
+  setupInput();
+  // UI buttons
+  wireUI();
+  // Resize
+  window.addEventListener('resize',onResize);
+
+  // Start render loop (idle - no gameplay yet)
+  renderIdle();
+}
+
+function buildRoad(){
+  // Road surface — long plane
+  const roadGeo=new THREE.BoxGeometry(9,0.15,500);
+  const roadMat=new THREE.MeshLambertMaterial({color:COLORS.road});
+  const road=new THREE.Mesh(roadGeo,roadMat); road.position.set(0,-0.08,-200);
+  road.receiveShadow=true; CR.scene.add(road);
+
+  // Lane lines
+  for(let l=-1;l<=1;l+=2){
+    const lGeo=new THREE.BoxGeometry(0.08,0.16,500);
+    const lMesh=new THREE.Mesh(lGeo,new THREE.MeshLambertMaterial({color:COLORS.line}));
+    lMesh.position.set(l*1.5,0,-200); CR.scene.add(lMesh);
+  }
+  // Sidewalks
+  [-5.2,5.2].forEach(x=>{
+    const sw=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.22,500),new THREE.MeshLambertMaterial({color:0x2a3040}));
+    sw.position.set(x,0,-200); CR.scene.add(sw);
   });
+}
+
+function buildBuildings(){
+  const RNG=(min,max,seed)=>{
+    const x=Math.sin(seed*127.1+seed*311.7)*43758.5453;
+    return min+(x-Math.floor(x))*(max-min);
+  };
+  for(let i=0;i<60;i++){
+    const side=i%2===0?1:-1;
+    const x=side*RNG(8,14,i);
+    const z=-i*8-20;
+    const w=RNG(3,8,i+100);
+    const h=RNG(8,28,i+200);
+    const d=RNG(4,10,i+300);
+    const col=[COLORS.bldA,COLORS.bldB,COLORS.bldC][i%3];
+    const bld=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color:col}));
+    bld.position.set(x,h/2,z); bld.castShadow=true; CR.scene.add(bld);
+    // Windows
+    const wCols=Math.floor(w/1.5); const wRows=Math.floor(h/2.5);
+    for(let wr=0;wr<wRows;wr++){
+      for(let wc=0;wc<wCols;wc++){
+        if(Math.random()<0.6){
+          const wm=new THREE.Mesh(new THREE.PlaneGeometry(0.7,0.9),
+            new THREE.MeshBasicMaterial({color:Math.random()<0.4?COLORS.winOn:COLORS.window}));
+          wm.position.set(x+(-w/2+wc*1.5+0.75),wr*2.5+2,z+d/2+0.01);
+          CR.scene.add(wm);
+        }
+      }
+    }
+    CR.buildings.push(bld);
+  }
+}
+
+function spawnTrack(zPos){
+  const grp=new THREE.Group(); grp.position.z=zPos;
+  // Overhead bar
+  const bar=new THREE.Mesh(new THREE.BoxGeometry(9,0.4,0.4),new THREE.MeshLambertMaterial({color:0x6b7280}));
+  bar.position.set(0,6,0); grp.add(bar);
+  // Pillars
+  [-4,4].forEach(x=>{
+    const p=new THREE.Mesh(new THREE.BoxGeometry(0.5,6,0.5),new THREE.MeshLambertMaterial({color:0x4b5563}));
+    p.position.set(x,3,0); grp.add(p);
+  });
+  // Neon strip on bar
+  const strip=new THREE.Mesh(new THREE.BoxGeometry(8.5,0.12,0.12),new THREE.MeshBasicMaterial({color:Math.random()<0.5?0x00f3ff:0xff00aa}));
+  strip.position.set(0,5.85,0); grp.add(strip);
+  CR.scene.add(grp);
+  CR.tracks.push({mesh:grp,z:zPos});
+}
+
+function buildPlayer(){
+  const g=new THREE.Group();
+  const mat=new THREE.MeshPhongMaterial({color:COLORS.player,emissive:COLORS.player,emissiveIntensity:0.4});
+  // Body (capsule approximation)
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.45,1.1,12),mat);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.45,12,12),mat);
+  head.position.y=0.85;
+  const bot=new THREE.Mesh(new THREE.SphereGeometry(0.45,12,12),mat);
+  bot.position.y=-0.85;
+  // Trail light
+  const trail=new THREE.PointLight(COLORS.player,2.5,8);
+  trail.position.set(0,0,1);
+  g.add(body,head,bot,trail);
+  g.position.set(LANES[CR.lane],1.3,0);
+  g.castShadow=true;
+  CR.scene.add(g);
+  CR.player=g;
+}
+
+// ── Gameplay ──────────────────────────────────────────────────────
+function pauseRun(){
+  if(!CR.active&&!CR.paused) return;
+  if(CR.paused){
+    CR.paused=false; CR.active=true;
+    if(el('cr-pause-btn')) el('cr-pause-btn').textContent='⏸ Pause';
+    loop();
+  } else {
+    CR.paused=true; CR.active=false;
+    cancelAnimationFrame(CR.animId);
+    if(el('cr-pause-btn')) el('cr-pause-btn').textContent='▶ Resume';
+  }
+}
+function startGame(){
+  CR.paused=false;
+  CR.active=true;
+  CR.score=0; CR.dist=0; CR.speed=0.22; CR.ticks=0;
+  CR.lane=1; CR.targetLane=1;
+  CR.pY=0; CR.pVY=0; CR.onGround=true; CR.doubleJumped=false;
+  CR.shield=CR.magnet=CR.boost=false;
+  CR.obstacles.forEach(o=>CR.scene.remove(o.mesh)); CR.obstacles=[];
+  CR.coins.forEach(c=>CR.scene.remove(c.mesh)); CR.coins=[];
+  CR.powerups.forEach(p=>CR.scene.remove(p.mesh)); CR.powerups=[];
+  CR.spawnTimer=CR.coinTimer=CR.puTimer=0;
+  if(CR.player) CR.player.position.set(0,1.3,0);
+  updateHUD();
+  el('cr-overlay')&&(el('cr-overlay').style.display='none');
+  if(CR.animId) cancelAnimationFrame(CR.animId);
+  loop();
+}
+
+function jump(){
+  if(!CR.active) return;
+  if(CR.onGround){
+    CR.pVY=CR.JUMP; CR.onGround=false;
+  } else if(CR.doubleJumpEnabled&&!CR.doubleJumped){
+    CR.pVY=CR.DLJUMP; CR.doubleJumped=true;
+  }
+}
+
+function shiftLane(dir){
+  if(!CR.active) return;
+  CR.targetLane=Math.max(0,Math.min(2,CR.targetLane+dir));
+}
+
+function loop(){
+  CR.animId=requestAnimationFrame(loop);
+  const dt=Math.min(CR.clock.getDelta(),0.05);
+  CR.ticks++;
+
+  // Speed ramp
+  CR.speed=Math.min(1.4, 0.22+CR.dist*0.0003);
+  const spd=CR.boost?CR.speed*1.7:CR.speed;
+
+  // Player lane lerp
+  const tx=LANES[CR.targetLane];
+  CR.player.position.x+=(tx-CR.player.position.x)*0.18;
+
+  // Gravity
+  CR.pVY-=CR.GRAVITY;
+  CR.pY+=CR.pVY;
+  if(CR.pY<=0){CR.pY=0;CR.pVY=0;CR.onGround=true;CR.doubleJumped=false;}
+  CR.player.position.y=1.3+CR.pY;
+
+  // Lean on lane change
+  CR.player.rotation.z=(tx-CR.player.position.x)*0.12;
+  // Bob
+  CR.player.rotation.x=CR.onGround?Math.sin(CR.ticks*0.18)*0.04:0;
+
+  // Track scroll
+  CR.tracks.forEach(t=>{
+    t.mesh.position.z+=spd*60*dt;
+    if(t.mesh.position.z>15){ t.mesh.position.z-=160; }
+  });
+  // Buildings scroll
+  CR.buildings.forEach(b=>{
+    b.position.z+=spd*60*dt*0.6;
+    if(b.position.z>30) b.position.z-=500;
+  });
+
+  // Spawn
+  CR.spawnTimer+=dt;
+  CR.coinTimer+=dt;
+  CR.puTimer+=dt;
+  const spawnInt=Math.max(0.7,1.8-CR.dist*0.00005);
+  if(CR.spawnTimer>spawnInt){CR.spawnTimer=0;spawnObstacle();if(CR.hardMode&&Math.random()<0.5)setTimeout(spawnObstacle,300);}
+  if(CR.coinTimer>1.8){CR.coinTimer=0;spawnCoin();}
+  if(CR.puTimer>6){CR.puTimer=0;spawnPowerup();}
+
+  // Move obstacles
+  for(let i=CR.obstacles.length-1;i>=0;i--){
+    const o=CR.obstacles[i];
+    o.mesh.position.z+=spd*60*dt;
+    o.mesh.rotation.y+=dt*0.5;
+    if(o.mesh.position.z>8){CR.scene.remove(o.mesh);CR.obstacles.splice(i,1);continue;}
+    // Collision
+    const dx=Math.abs(CR.player.position.x-o.mesh.position.x);
+    const dz=Math.abs(CR.player.position.z-o.mesh.position.z);
+    const dy=Math.abs(CR.player.position.y-o.mesh.position.y);
+    if(dx<1.1&&dz<1.5&&dy<1.5){
+      if(CR.shield){CR.shield=false;CR.shieldT=0;CR.scene.remove(o.mesh);CR.obstacles.splice(i,1);}
+      else{gameOver();return;}
+    }
+  }
+
+  // Move coins
+  for(let i=CR.coins.length-1;i>=0;i--){
+    const cn=CR.coins[i];
+    cn.mesh.position.z+=spd*60*dt;
+    cn.mesh.rotation.y+=dt*3;
+    if(cn.mesh.position.z>8){CR.scene.remove(cn.mesh);CR.coins.splice(i,1);continue;}
+    const mx=CR.magnet?4.5:0.9;
+    const dx=Math.abs(CR.player.position.x-cn.mesh.position.x);
+    const dz=Math.abs(CR.player.position.z-cn.mesh.position.z);
+    // Magnet: pull coin toward player
+    if(CR.magnet&&dz<8&&dx<4){
+      cn.mesh.position.x+=(CR.player.position.x-cn.mesh.position.x)*0.12;
+      cn.mesh.position.z+=(CR.player.position.z-cn.mesh.position.z)*0.08;
+    }
+    if(dx<mx&&dz<mx){
+      CR.scene.remove(cn.mesh);CR.coins.splice(i,1);
+      CR.score+=5; updateHUD();
+    }
+  }
+
+  // Move powerups
+  for(let i=CR.powerups.length-1;i>=0;i--){
+    const pu=CR.powerups[i];
+    pu.mesh.position.z+=spd*60*dt;
+    pu.mesh.rotation.y+=dt*2;
+    if(pu.mesh.position.z>8){CR.scene.remove(pu.mesh);CR.powerups.splice(i,1);continue;}
+    const dx=Math.abs(CR.player.position.x-pu.mesh.position.x);
+    const dz=Math.abs(CR.player.position.z-pu.mesh.position.z);
+    if(dx<1.3&&dz<1.3){
+      CR.scene.remove(pu.mesh);CR.powerups.splice(i,1);
+      activatePowerup(pu.type);
+    }
+  }
+
+  // Powerup timers
+  if(CR.shield&&(CR.shieldT-=dt)<=0) CR.shield=false;
+  if(CR.magnet&&(CR.magnetT-=dt)<=0) CR.magnet=false;
+  if(CR.boost&&(CR.boostT-=dt)<=0) CR.boost=false;
+
+  // Score
+  CR.dist+=spd*60*dt;
+  CR.score=Math.floor(CR.dist/8)+Math.floor(CR.score/5)*5;
+  updateHUD();
+
+  // Camera slight bob
+  CR.camera.position.y=4.5+Math.sin(CR.ticks*0.09)*0.07;
+
+  // Shield glow
+  const shieldRing=el('cr-shield-ring');
+  if(shieldRing) shieldRing.style.display=CR.shield?'block':'none';
+
+  CR.renderer.render(CR.scene,CR.camera);
+}
+
+function renderIdle(){
+  CR.animId=requestAnimationFrame(renderIdle);
+  if(CR.active) return;
+  const t=performance.now()/1000;
+  CR.camera.position.x=Math.sin(t*0.15)*2;
+  CR.camera.lookAt(0,2,-20);
+  if(CR.tracks.length){
+    CR.tracks.forEach(tk=>{ tk.mesh.position.z+=0.15; if(tk.mesh.position.z>15) tk.mesh.position.z-=160; });
+    CR.buildings.forEach(b=>{ b.position.z+=0.08; if(b.position.z>30) b.position.z-=500; });
+  }
+  CR.renderer.render(CR.scene,CR.camera);
+}
+
+function spawnObstacle(){
+  const lane=Math.floor(Math.random()*3);
+  const types=['bus','barrier','crate'];
+  const type=types[Math.floor(Math.random()*types.length)];
+  const dims={bus:{w:2.0,h:2.2,d:4.5},barrier:{w:1.2,h:1.8,d:0.6},crate:{w:1.4,h:1.4,d:1.4}};
+  const d=dims[type];
+  const col=type==='bus'?0xef4444:type==='barrier'?0xf59e0b:COLORS.obs;
+  const mesh=new THREE.Mesh(new THREE.BoxGeometry(d.w,d.h,d.d),new THREE.MeshPhongMaterial({color:col,emissive:col,emissiveIntensity:0.15}));
+  mesh.position.set(LANES[lane],d.h/2,-50);
+  mesh.castShadow=true;
+  CR.scene.add(mesh);
+  CR.obstacles.push({mesh,lane,type,h:d.h/2});
+}
+
+function spawnCoin(){
+  const lane=Math.floor(Math.random()*3);
+  const h=Math.random()<0.3?2.2:0.5;
+  const mesh=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.35,0.15,12),new THREE.MeshPhongMaterial({color:COLORS.coin,emissive:COLORS.coin,emissiveIntensity:0.5}));
+  mesh.rotation.x=Math.PI/2; mesh.position.set(LANES[lane],h,-52);
+  CR.scene.add(mesh); CR.coins.push({mesh,lane});
+}
+
+function spawnPowerup(){
+  const lane=Math.floor(Math.random()*3);
+  const types=['shield','magnet','boost'];
+  const type=types[Math.floor(Math.random()*types.length)];
+  const cols={shield:COLORS.shield,magnet:COLORS.magnet,boost:COLORS.boost};
+  const mesh=new THREE.Mesh(new THREE.OctahedronGeometry(0.55),new THREE.MeshPhongMaterial({color:cols[type],emissive:cols[type],emissiveIntensity:0.6}));
+  mesh.position.set(LANES[lane],1.5,-55);
+  CR.scene.add(mesh); CR.powerups.push({mesh,lane,type});
+}
+
+function activatePowerup(type){
+  if(type==='shield'){CR.shield=true;CR.shieldT=5;}
+  if(type==='magnet'){CR.magnet=true;CR.magnetT=7;}
+  if(type==='boost'){CR.boost=true;CR.boostT=5;}
+  const msgs={shield:'🛡 SHIELD!',magnet:'🧲 MAGNET!',boost:'⚡ BOOST!'};
+  showMsg(msgs[type]);
+}
+
+function gameOver(){
+  CR.active=false;
+  if(CR.score>CR.hiScore){CR.hiScore=CR.score;localStorage.setItem('crHiV2',CR.hiScore);}
+  if(el('cr-hi')) el('cr-hi').textContent='BEST: '+CR.hiScore;
+  if(el('cr-hi2')) el('cr-hi2').textContent='BEST: '+CR.hiScore;
+  if(el('cr-final-score')) el('cr-final-score').textContent='Score: '+CR.score;
+  if(el('cr-overlay')){
+    el('cr-overlay').style.display='flex';
+    if(el('cr-title')) el('cr-title').textContent='GAME OVER';
+    if(el('cr-msg')) el('cr-msg').textContent='';
+  }
+  cancelAnimationFrame(CR.animId);
+  renderIdle();
+}
+
+function showMsg(txt){
+  const m=el('cr-powerup-msg');
+  if(!m) return;
+  m.textContent=txt; m.style.opacity='1';
+  clearTimeout(m._t); m._t=setTimeout(()=>m.style.opacity='0',1500);
+}
+
+function updateHUD(){
+  if(el('cr-score')) el('cr-score').textContent='SCORE: '+CR.score;
+  if(el('cr-hi')) el('cr-hi').textContent='BEST: '+CR.hiScore;
+  if(el('cr-hi2')) el('cr-hi2').textContent='BEST: '+CR.hiScore;
+}
+
+// ── Input ─────────────────────────────────────────────────────────
+function setupInput(){
+  let touchX=null;
+  document.addEventListener('keydown',e=>{
+    const _cdp=el('city-dash-panel'); if(!_cdp||_cdp.style.display!=='block') return;
+    if(e.key==='ArrowLeft'||e.key==='a') shiftLane(-1);
+    if(e.key==='ArrowRight'||e.key==='d') shiftLane(1);
+    if(e.key==='ArrowUp'||e.key===' '||e.key==='w'||e.key==='Spacebar') jump();
+  });
+
+  const wrap=el('cr-wrap');
+  if(wrap){
+    wrap.addEventListener('touchstart',e=>{touchX=e.touches[0].clientX;},false);
+    wrap.addEventListener('touchend',e=>{
+      if(touchX===null) return;
+      const dx=e.changedTouches[0].clientX-touchX;
+      const dy=e.changedTouches[0].clientY-e.touches[0]?.clientY||0;
+      if(Math.abs(dx)>40) shiftLane(dx>0?1:-1);
+      else jump();
+      touchX=null;
+    },false);
+    wrap.addEventListener('click',()=>{if(!CR.active) return; jump();});
+  }
+}
+
+function wireUI(){
+  const startBtn=el('cr-start');
+  if(startBtn) startBtn.onclick=startGame;
+  const pauseBtn=el('cr-pause-btn');
+  if(pauseBtn) pauseBtn.onclick=pauseRun;
+
+  // On-screen controls
+  el('cr-btn-left')&&(el('cr-btn-left').onclick=()=>shiftLane(-1));
+  el('cr-btn-right')&&(el('cr-btn-right').onclick=()=>shiftLane(1));
+  el('cr-btn-jump')&&(el('cr-btn-jump').onclick=()=>jump());
+
+  // Settings toggles
+  el('cr-dj-toggle')&&(el('cr-dj-toggle').onchange=e=>{CR.doubleJumpEnabled=e.target.value==='true';});
+  el('cr-hard-toggle')&&(el('cr-hard-toggle').onchange=e=>{CR.hardMode=e.target.value==='true';});
+  el('cr-scenery-toggle')&&(el('cr-scenery-toggle').onchange=e=>{CR.scenery=e.target.value;if(CR.started)rebuildScenery();});
+  el('cr-keys-toggle')&&(el('cr-keys-toggle').onchange=e=>{
+    const show=e.target.value==='true';
+    ['cr-btn-left','cr-btn-right','cr-btn-jump'].forEach(id=>{const b=el(id);if(b)b.style.display=show?'':'none';});
+  });
+}
+
+function rebuildScenery(){
+  // Remove old buildings
+  CR.buildings.forEach(b=>CR.scene.remove(b)); CR.buildings=[];
+  buildBuildings();
+}
+function onResize(){
+  const wrap=el('cr-wrap');
+  if(!wrap||!CR.renderer) return;
+  CR.renderer.setSize(wrap.clientWidth,wrap.clientHeight);
+  CR.camera.aspect=wrap.clientWidth/wrap.clientHeight;
+  CR.camera.updateProjectionMatrix();
+}
+
+// Expose
+window.cityPauseRun=function(){if(CR.started)pauseRun();};
+window.cityDashInit=function(){
+  if(CR.started) return;
+  CR.started=true;
+  init();
+};
 })();
 
-/* ══ Chess64 3D page init ════════════════════════════════════════════ */
+</script>
+
+<!-- ══════════════════════ CHESS64 3D PAGE ══════════════════════ -->
+<div class="page" id="page-chess3d">
+<div class="container" style="max-width:1200px">
+  <div id="chess3d-landing">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+      <div><h1 style="margin:0">♟ Chess64 3D</h1>
+      <p style="color:var(--text2);font-size:13px;margin:4px 0 0">Experience chess like never before.</p></div>
+      <button class="btn btn-ghost btn-sm" onclick="navTo('home')" style="margin-left:auto">← Chess64 Home</button>
+    </div>
+    <div class="card" style="padding:28px;margin-bottom:20px;text-align:center;background:linear-gradient(135deg,rgba(59,130,246,.15),rgba(139,92,246,.1));border:1px solid rgba(59,130,246,.2)">
+      <div style="font-size:56px;margin-bottom:12px">♟</div>
+      <h2 style="margin:0 0 12px;font-size:24px">Chess64's Premium 3D Chess Set</h2>
+      <p style="color:var(--text2);font-size:14px;line-height:1.7;max-width:600px;margin:0 auto 20px">Enjoy Chess64's meticulously crafted 3D chess experience. Every piece was designed to feel satisfying — the perfect glare catches the board's surface as you rotate the camera, and the subtle <em>click</em> of a piece landing on the board is engineered to feel deliberate and precise. The board itself has a premium depth to it: rich textures, soft ambient lighting, and the kind of weight you'd expect from an over-the-board set. This isn't just chess — it's chess that feels good.</p>
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+        <button class="btn btn-primary btn-lg" onclick="chess3dShowGame()">▶ Play Chess64 3D</button>
+        <button class="btn btn-ghost btn-lg" onclick="navTo('play')">♟ Play vs Bot (2D)</button>
+      </div>
+      <p style="font-size:11px;color:var(--text2);margin:14px 0 0;opacity:.7">🖱 Drag to rotate · Scroll to zoom · Click piece then square to move</p>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px">
+      <div class="card" style="padding:18px"><div style="font-size:28px;margin-bottom:8px">✨</div><h3 style="margin:0 0 6px">Premium Glare</h3><p style="color:var(--text2);font-size:13px;margin:0">Specular highlights react to lighting as you rotate, giving the board a satisfying sheen.</p></div>
+      <div class="card" style="padding:18px"><div style="font-size:28px;margin-bottom:8px">🔊</div><h3 style="margin:0 0 6px">Piece Sound Design</h3><p style="color:var(--text2);font-size:13px;margin:0">A satisfying thunk crafted to feel weighted and deliberate — like a real wooden set.</p></div>
+      <div class="card" style="padding:18px"><div style="font-size:28px;margin-bottom:8px">🎥</div><h3 style="margin:0 0 6px">Free Camera</h3><p style="color:var(--text2);font-size:13px;margin:0">Orbit freely. Multiple boards, piece styles, glare colors, and backgrounds.</p></div>
+    </div>
+  </div>
+  <div id="chess3d-game-panel" style="display:none">
+    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="chess3dHideGame()">← Back</button>
+      <button class="btn btn-ghost btn-sm" onclick="navTo('home')">← Chess64 Home</button>
+      <span id="c3d-status" style="font-size:11px;color:var(--text2);margin-left:auto;text-transform:uppercase;letter-spacing:.06em">Analyze</span>
+    </div>
+    <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">
+      <div id="c3d-eval-wrap" style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0">
+        <div id="c3d-eval-txt" style="font-size:10px;font-family:monospace;color:var(--text2)">0.0</div>
+        <div style="width:10px;height:260px;background:#1a1a2a;border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,.1);position:relative">
+          <div id="c3d-eval-fill" style="position:absolute;bottom:0;width:100%;height:50%;background:#e2e8f0;transition:height .8s cubic-bezier(.16,1,.3,1);border-radius:20px"></div>
+        </div>
+      </div>
+      <div id="c3d-root" style="flex:1;min-width:0;height:78vh;background:#080812;border-radius:12px;overflow:hidden;position:relative;min-height:420px">
+        <div id="c3d-board2d-wrap" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;background:#0a0a14;z-index:5">
+          <div id="c3d-board2d" style="display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);width:min(90vw,90%,500px);height:min(80vh,500px);aspect-ratio:1;border-radius:6px;overflow:hidden;box-shadow:0 0 40px rgba(0,0,0,.8);flex-shrink:0"></div>
+        </div>
+        <div id="c3d-bm-wrap" style="position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:10;background:rgba(0,0,10,.82);backdrop-filter:blur(12px);border:1px solid rgba(59,130,246,.25);border-radius:10px;padding:6px 14px;text-align:center;pointer-events:none">
+          <div style="font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#60a5fa;margin-bottom:2px">Best Move</div>
+          <div id="c3d-best-val" style="font-family:monospace;font-size:16px;font-weight:700;color:#fff">–</div>
+        </div>
+      </div>
+      <div style="width:215px;flex-shrink:0;display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;flex-wrap:wrap;gap:5px">
+          <button id="c3d-btn-eval" class="btn btn-ghost btn-sm" style="flex:1">Hide Eval</button>
+          <button id="c3d-btn-bm" class="btn btn-ghost btn-sm" style="flex:1">Hide Best</button>
+          <button id="c3d-btn-settings" class="btn btn-ghost btn-sm" style="width:100%">⚙ Settings</button>
+        </div>
+        <div id="c3d-settings-panel" style="background:rgba(10,10,20,.92);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;max-height:62vh;overflow-y:auto">
+          <div><label style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;display:block;margin-bottom:3px">Game Mode</label>
+          <select id="c3d-mode" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:5px;font-size:11px;outline:none">
+            <option value="analyze">Free Analysis</option><option value="play">Vs Computer</option>
+            <option value="comp-vs-comp">Engine vs Engine</option><option value="friend">Vs Friend (same device)</option>
+          </select></div>
+          <div id="c3d-engine-row" style="display:none;flex-direction:column;gap:6px">
+            <div id="c3d-white-engine-row" style="display:none;flex-direction:column;gap:4px;padding:6px;background:rgba(59,130,246,.1);border-radius:6px;border:1px solid rgba(59,130,246,.2)">
+              <label style="font-size:9px;font-weight:900;color:#60a5fa;text-transform:uppercase;display:block">⬜ White Engine</label>
+              <select id="c3d-level-w" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:4px;font-size:10px;outline:none"></select>
+              <select id="c3d-style-w" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:4px;font-size:10px;outline:none"></select>
+            </div>
+            <div id="c3d-black-engine-row" style="display:none;flex-direction:column;gap:4px;padding:6px;background:rgba(239,68,68,.1);border-radius:6px;border:1px solid rgba(239,68,68,.2)">
+              <label style="font-size:9px;font-weight:900;color:#f87171;text-transform:uppercase;display:block">⬛ Black Engine</label>
+              <select id="c3d-level-b" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:4px;font-size:10px;outline:none"></select>
+              <select id="c3d-style-b" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:4px;font-size:10px;outline:none"></select>
+            </div>
+            <div><label style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;display:block;margin-bottom:3px">Engine Level</label>
+            <select id="c3d-level" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:5px;font-size:11px;outline:none"></select></div>
+            <div><label style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;display:block;margin-bottom:3px">Playing Style</label>
+            <select id="c3d-style" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:5px;font-size:11px;outline:none"></select>
+            <div id="c3d-style-desc" style="font-size:9px;color:var(--text2);margin-top:3px;opacity:.8">Plays principled chess</div></div>
+            <div><label style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;display:block;margin-bottom:3px">Your Side</label>
+            <select id="c3d-side" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:5px;font-size:11px;outline:none">
+              <option value="w">White</option><option value="b">Black</option></select></div>
+          </div>
+          <div id="c3d-friend-row" style="display:none"><label style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;display:block;margin-bottom:3px">Auto-rotate each move</label>
+          <select id="c3d-autorotate" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:5px;font-size:11px;outline:none">
+            <option value="true">Enabled</option><option value="false">Disabled</option></select></div>
+          <div><label style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;display:block;margin-bottom:3px">Board Theme</label>
+          <select id="c3d-board" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:5px;font-size:11px;outline:none">
+            <option value="midnight">Obsidian</option><option value="wood">Walnut</option>
+            <option value="marble">Emerald</option><option value="cyber">Cyberpunk</option>
+            <option value="royal">Royal Gold</option><option value="ice">Arctic</option></select></div>
+          <div><label style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;display:block;margin-bottom:3px">Piece Style</label>
+          <select id="c3d-piece" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:5px;font-size:11px;outline:none">
+            <option value="classic">Classic (Matte)</option><option value="metallic">Metallic</option>
+            <option value="glass">Crystal Glass</option><option value="neon">Neon Glow</option>
+            <option value="gold">Luxury Gold</option></select></div>
+          <div><label style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;display:block;margin-bottom:3px">Background</label>
+          <select id="c3d-bg" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:5px;font-size:11px;outline:none">
+            <option value="dark">Dark Space</option><option value="midnight">Midnight</option>
+            <option value="forest">Forest</option><option value="crimson">Deep Red</option>
+            <option value="void">Pure Black</option></select></div>
+          <div><label style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;display:block;margin-bottom:3px">Glare Color</label>
+          <select id="c3d-glare" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:5px;font-size:11px;outline:none">
+            <option value="blue">Electric Blue</option><option value="red">Ruby Red</option>
+            <option value="green">Acid Green</option><option value="gold">Solar Gold</option>
+            <option value="off">Disabled</option></select></div>
+          <div><label style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;display:block;margin-bottom:3px">View</label>
+          <select id="c3d-view" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:5px;font-size:11px;outline:none">
+            <option value="3d">3D Board</option><option value="2d">2D Board</option></select></div>
+          <div><label style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;display:block;margin-bottom:3px">Animations</label>
+          <select id="c3d-anim" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:5px;font-size:11px;outline:none">
+            <option value="true">Enabled</option><option value="false">Off</option></select></div>
+          <div><label style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;display:block;margin-bottom:3px">Sound</label>
+          <select id="c3d-sound" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:5px;font-size:11px;outline:none">
+            <option value="true">On</option><option value="false">Off</option></select></div>
+          <div><label style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;display:block;margin-bottom:3px">Coordinates</label>
+          <select id="c3d-coords" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:5px;font-size:11px;outline:none">
+            <option value="true">Visible</option><option value="false">Hidden</option></select></div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px">
+          <button id="c3d-btn-undo" class="btn btn-ghost btn-sm" style="flex:1">↩ Undo</button>
+          <button id="c3d-btn-reset" class="btn btn-ghost btn-sm" style="flex:1">↺ Reset</button>
+          <button id="c3d-btn-flip" class="btn btn-ghost btn-sm" style="flex:1">⇄ Flip</button>
+          <button id="c3d-btn-recenter" class="btn btn-ghost btn-sm" style="flex:1">⌖ Center</button>
+          <button id="c3d-btn-pgn" class="btn btn-ghost btn-sm" style="flex:1">Copy PGN</button>
+          <button id="c3d-btn-movelist" class="btn btn-ghost btn-sm" style="flex:1">Hide Moves</button>
+        </div>
+        <!-- Move list -->
+        <div id="c3d-movelist-wrap" style="background:rgba(10,10,20,.92);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px;max-height:120px;overflow-y:auto">
+          <div style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Move List</div>
+          <div id="c3d-move-list" style="line-height:1.8;word-break:break-all"><span style="color:rgba(255,255,255,.3);font-size:11px">No moves yet</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script id="chess3d-game-script">
+// ═══════════════════════════════════════════════════════════════════
+// Chess64 3D — Built from scratch
+// ═══════════════════════════════════════════════════════════════════
 (function(){
-  var _o=window.navTo;
-  window.navTo=function(page){
-    if(_o) _o(page);
-    if(page==='chess3d'){
-      // Trigger Three.js init after the page becomes visible
-      setTimeout(function(){
-        if(typeof init3DChess==='function') { try{init3DChess();}catch(e){} }
-        else if(typeof initScene==='function') { try{initScene();}catch(e){} }
-        else if(typeof animate==='function') { try{animate();}catch(e){} }
-      },100);
+'use strict';
+
+// ── State ──────────────────────────────────────────────────────────
+const Chess3D = {
+  scene:null, camera:null, renderer:null, raycaster:null, mouse:new THREE.Vector2(),
+  game:null, stockfish:null, engineReady:false,
+  pieces:{}, boardGroup:new THREE.Group(), rimLight:null,
+  theta:Math.PI/2, phi:Math.PI/3.5, radius:14,
+  tTheta:Math.PI/2, tPhi:Math.PI/3.5,
+  isDragging:false, dragMoved:false, startMouse:{x:0,y:0}, prevMouse:{x:0,y:0},
+  pinchDist:0,
+  selectedSq:null, mode:'analyze', userColor:'w',
+  bestMoveEnabled:true, evalVisible:true, uiVisible:true, soundEnabled:true,
+  animEnabled:true, autoRotate:false,
+  boardTheme:'midnight', pieceStyle:'classic', bgStyle:'dark',
+  matType:'plastic',
+  glareColor:'blue', glareColors:{blue:0x3b82f6,red:0xef4444,green:0x22c55e,gold:0xf59e0b,off:null},
+  started:false, animating:{},
+  showCoords:false
+};
+
+// Audio
+const AudioCtx={ctx:null};
+function playThunk(){
+  if(!Chess3D.soundEnabled) return;
+  try{
+    if(!AudioCtx.ctx) AudioCtx.ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const ctx=AudioCtx.ctx; if(ctx.state==='suspended') ctx.resume();
+    const buf=ctx.createBuffer(1,ctx.sampleRate*0.12,ctx.sampleRate);
+    const d=buf.getChannelData(0);
+    for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.exp(-i/(ctx.sampleRate*0.04));
+    const src=ctx.createBufferSource(); src.buffer=buf;
+    const gain=ctx.createGain(); gain.gain.setValueAtTime(0.25,ctx.currentTime);
+    const filt=ctx.createBiquadFilter(); filt.type='bandpass'; filt.frequency.value=320;
+    src.connect(filt); filt.connect(gain); gain.connect(ctx.destination); src.start();
+  }catch(e){}
+}
+
+// Board themes
+const THEMES={
+  midnight:{light:0x3a3a4a,dark:0x1a1a2a,trim:0x0a0a15,label:'Obsidian'},
+  wood:{light:0xeedcb3,dark:0x7a503a,trim:0x4a2e1f,label:'Walnut'},
+  marble:{light:0xfafafa,dark:0x22c55e,trim:0x166534,label:'Emerald'},
+  cyber:{light:0x00f3ff,dark:0x001a1a,trim:0x000000,label:'Cyberpunk'},
+  royal:{light:0xd4af37,dark:0x2d1b69,trim:0x1a0f3d,label:'Royal'},
+  ice:{light:0xe0f2fe,dark:0x0369a1,trim:0x082f49,label:'Arctic'}
+};
+
+// Piece configs
+const PIECE_STYLES={
+  classic:{label:'Classic',roughness:0.6,metalness:0},
+  metallic:{label:'Metallic',roughness:0.15,metalness:0.9},
+  glass:{label:'Crystal',roughness:0.05,metalness:0},
+  neon:{label:'Neon',emissive:true},
+  gold:{label:'Gold',color:0xffd700,roughness:0.1,metalness:1}
+};
+
+const BACKGROUNDS={
+  dark:{label:'Dark Space',color:0x080812},
+  midnight:{label:'Midnight',color:0x0a0a1a},
+  forest:{label:'Forest',color:0x0a1a0a},
+  crimson:{label:'Deep Red',color:0x1a0808},
+  void:{label:'Void',color:0x000000}
+};
+
+// Bot styles
+const BOT_STYLES=[
+  {id:'balanced',label:'Balanced',contempt:0,desc:'Plays principled chess'},
+  {id:'aggressive',label:'Aggressive',contempt:80,desc:'Attacks and sacrifices'},
+  {id:'positional',label:'Positional',contempt:-20,desc:'Slow squeezing style'},
+  {id:'tal',label:'Tal Inspired',contempt:120,desc:'Wild tactical complications'},
+  {id:'defensive',label:'Defensive',contempt:-60,desc:'Solid and reactive'},
+  {id:'gambit',label:'Gambiteer',contempt:50,desc:'Sacrifices for initiative'},
+  {id:'boring',label:'Boring',contempt:-100,desc:'Grinds endgames'},
+  {id:'explosive',label:'Explosive',contempt:150,desc:'Maximum chaos'}
+];
+
+// ELO levels
+const ELO={1:400,2:600,3:800,4:950,5:1100,6:1250,7:1400,8:1550,9:1700,10:1850,
+           11:2000,12:2100,13:2200,14:2300,15:2400,16:2500,17:2600,18:2700,19:2800,20:3300};
+
+// Piece images
+const PI={
+  w:{p:'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg',
+     r:'https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg',
+     n:'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg',
+     b:'https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg',
+     q:'https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg',
+     k:'https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg'},
+  b:{p:'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg',
+     r:'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg',
+     n:'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg',
+     b:'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg',
+     q:'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg',
+     k:'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg'}
+};
+
+// ── Init ────────────────────────────────────────────────────────────
+function init(){
+  Chess3D.game = new Chess();
+  const root = document.getElementById('c3d-root');
+  if(!root) return;
+
+  // Scene
+  Chess3D.scene = new THREE.Scene();
+  setBg();
+
+  // Camera
+  Chess3D.camera = new THREE.PerspectiveCamera(42, root.clientWidth/root.clientHeight, 0.1, 1000);
+  updateCamera();
+
+  // Renderer
+  Chess3D.renderer = new THREE.WebGLRenderer({antialias:true, alpha:false});
+  Chess3D.renderer.setSize(root.clientWidth, root.clientHeight);
+  Chess3D.renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  Chess3D.renderer.shadowMap.enabled = true;
+  Chess3D.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  Chess3D.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  Chess3D.renderer.toneMappingExposure = 1.1;
+  root.appendChild(Chess3D.renderer.domElement);
+
+  // Raycaster
+  Chess3D.raycaster = new THREE.Raycaster();
+
+  // Lights
+  setupLights();
+
+  // Board + pieces
+  buildBoard();
+  syncPieces();
+
+  // Interaction
+  setupInteraction(root);
+
+  // Animate
+  animate();
+
+  // Engine
+  initEngine();
+
+  // Wire UI
+  wireUI();
+}
+
+function setBg(){
+  const bg=BACKGROUNDS[Chess3D.bgStyle]||BACKGROUNDS.dark;
+  Chess3D.scene.background = new THREE.Color(bg.color);
+  Chess3D.scene.fog = new THREE.FogExp2(bg.color, 0.018);
+}
+
+function setupLights(){
+  const s=Chess3D.scene;
+  s.add(new THREE.AmbientLight(0xffffff, 0.45));
+  const sun=new THREE.DirectionalLight(0xffffff,0.9);
+  sun.position.set(8,16,8); sun.castShadow=true;
+  sun.shadow.mapSize.width=2048; sun.shadow.mapSize.height=2048;
+  sun.shadow.camera.near=0.1; sun.shadow.camera.far=60;
+  sun.shadow.camera.left=-12; sun.shadow.camera.right=12;
+  sun.shadow.camera.top=12; sun.shadow.camera.bottom=-12;
+  sun.shadow.bias=-0.001;
+  s.add(sun);
+
+  const fill=new THREE.DirectionalLight(0x8888ff,0.3);
+  fill.position.set(-8,6,-8); s.add(fill);
+
+  Chess3D.rimLight=new THREE.PointLight(0x3b82f6,2.2,35);
+  Chess3D.rimLight.position.set(-10,9,-10);
+  s.add(Chess3D.rimLight);
+
+  updateGlare();
+}
+
+// ── Board building ─────────────────────────────────────────────────
+function buildBoard(){
+  const s=Chess3D.scene;
+  if(Chess3D.boardGroup.parent) s.remove(Chess3D.boardGroup);
+  Chess3D.boardGroup = new THREE.Group();
+  const theme=THEMES[Chess3D.boardTheme]||THEMES.midnight;
+
+  // Frame
+  const frameGeo=new THREE.BoxGeometry(9.4,0.18,9.4);
+  const frameMat=new THREE.MeshStandardMaterial({color:theme.trim,roughness:0.3,metalness:0.4});
+  const frame=new THREE.Mesh(frameGeo,frameMat);
+  frame.position.y=-0.08; frame.receiveShadow=true;
+  Chess3D.boardGroup.add(frame);
+
+  // Squares
+  const sqGeo=new THREE.BoxGeometry(1,0.12,1);
+  for(let r=0;r<8;r++){
+    for(let cc=0;cc<8;cc++){
+      const isLight=(r+cc)%2===0;
+      const col=isLight?theme.light:theme.dark;
+      const mat=new THREE.MeshStandardMaterial({color:col,roughness:0.35,metalness:0.05});
+      const sq=new THREE.Mesh(sqGeo,mat);
+      sq.position.set(cc-3.5,0,r-3.5);
+      sq.receiveShadow=true;
+      sq.userData.sq=String.fromCharCode(97+cc)+(8-r);
+      sq.userData.origColor=col;
+      Chess3D.boardGroup.add(sq);
     }
+  }
+
+  // Coord labels
+  const ctx2=document.createElement('canvas'); ctx2.width=512; ctx2.height=512;
+  const cx=ctx2.getContext('2d');
+  cx.fillStyle='rgba(255,255,255,0.0)'; cx.fillRect(0,0,512,512);
+  cx.font='bold 36px Arial'; cx.fillStyle='rgba(255,255,255,0.55)';
+  ['a','b','c','d','e','f','g','h'].forEach((l,i)=>{ cx.fillText(l,i*64+24,500); });
+  ['1','2','3','4','5','6','7','8'].forEach((l,i)=>{ cx.fillText(l,4,(7-i)*64+44); });
+  const labelTex=new THREE.CanvasTexture(ctx2);
+  const labelMesh=new THREE.Mesh(new THREE.PlaneGeometry(8,8),
+    new THREE.MeshBasicMaterial({map:labelTex,transparent:true,opacity:0.7}));
+  labelMesh.rotation.x=-Math.PI/2; labelMesh.position.y=0.07;
+  Chess3D.boardGroup.add(labelMesh);
+
+  s.add(Chess3D.boardGroup);
+}
+
+// ── Piece meshes ───────────────────────────────────────────────────
+function getMat(isWhite){
+  const style=PIECE_STYLES[Chess3D.pieceStyle]||PIECE_STYLES.classic;
+  const baseColor=isWhite?0xeeeeee:0x111111;
+  if(Chess3D.pieceStyle==='glass'){
+    return new THREE.MeshPhysicalMaterial({color:isWhite?0xddeeff:0x112233,
+      transmission:0.92,roughness:0.04,thickness:1.2,envMapIntensity:0.8});
+  }
+  if(Chess3D.pieceStyle==='neon'){
+    const nc=isWhite?0x00f3ff:0xff00ff;
+    return new THREE.MeshStandardMaterial({color:nc,emissive:nc,emissiveIntensity:0.7,roughness:0.3});
+  }
+  if(Chess3D.pieceStyle==='gold'){
+    return new THREE.MeshStandardMaterial({color:0xffd700,roughness:0.1,metalness:1});
+  }
+  return new THREE.MeshStandardMaterial({color:baseColor,roughness:style.roughness||0.6,metalness:style.metalness||0});
+}
+
+function makePiece(type,color){
+  const g=new THREE.Group();
+  const isW=color==='w';
+  const mat=getMat(isW);
+  const add=(geo,y,m)=>{const mesh=new THREE.Mesh(geo,m||mat);mesh.position.y=y;mesh.castShadow=true;mesh.receiveShadow=true;g.add(mesh);return mesh;};
+
+  // Base
+  add(new THREE.CylinderGeometry(0.40,0.46,0.14,24),0.07);
+  add(new THREE.CylinderGeometry(0.34,0.40,0.10,24),0.19);
+
+  switch(type){
+    case 'p':
+      add(new THREE.CylinderGeometry(0.14,0.30,0.58,16),0.43);
+      add(new THREE.SphereGeometry(0.20,16,16),0.82); break;
+    case 'r':
+      add(new THREE.CylinderGeometry(0.26,0.32,0.78,16),0.47);
+      add(new THREE.CylinderGeometry(0.30,0.30,0.22,8),0.97);
+      // Battlements
+      for(let i=0;i<4;i++){
+        const bb=add(new THREE.BoxGeometry(0.12,0.18,0.12),1.12);
+        bb.position.x=Math.cos(i*Math.PI/2)*0.22;
+        bb.position.z=Math.sin(i*Math.PI/2)*0.22;
+      }
+      break;
+    case 'n':
+      add(new THREE.CylinderGeometry(0.22,0.30,0.40,16),0.34);
+      const nh=add(new THREE.BoxGeometry(0.26,0.52,0.36),0.72);
+      nh.rotation.x=0.35;
+      const nhead=add(new THREE.BoxGeometry(0.22,0.28,0.46),1.02);
+      nhead.rotation.x=-0.2;
+      break;
+    case 'b':
+      add(new THREE.CylinderGeometry(0.14,0.28,0.88,16),0.54);
+      const bh=add(new THREE.SphereGeometry(0.20,16,16),1.06); bh.scale.y=1.25;
+      add(new THREE.SphereGeometry(0.07,8,8),1.38);
+      break;
+    case 'q':
+      add(new THREE.CylinderGeometry(0.18,0.32,1.12,20),0.70);
+      add(new THREE.SphereGeometry(0.26,16,16),1.38);
+      // Crown points
+      for(let i=0;i<5;i++){
+        const qp=add(new THREE.SphereGeometry(0.07,8,8),1.62);
+        qp.position.x=Math.cos(i*2*Math.PI/5)*0.20;
+        qp.position.z=Math.sin(i*2*Math.PI/5)*0.20;
+      }
+      break;
+    case 'k':
+      add(new THREE.CylinderGeometry(0.20,0.34,1.26,20),0.77);
+      add(new THREE.CylinderGeometry(0.22,0.22,0.14,20),1.47);
+      add(new THREE.BoxGeometry(0.10,0.38,0.10),1.68);
+      add(new THREE.BoxGeometry(0.28,0.10,0.10),1.64);
+      break;
+  }
+  return g;
+}
+
+// ── Piece sync ─────────────────────────────────────────────────────
+function syncPieces(animate){
+  const board=Chess3D.game.board();
+  const active={};
+  for(let r=0;r<8;r++)
+    for(let cc=0;cc<8;cc++)
+      if(board[r][cc]) active[String.fromCharCode(97+cc)+(8-r)]=board[r][cc];
+
+  // Remove dead pieces (but not animating ones)
+  Object.keys(Chess3D.pieces).forEach(sq=>{
+    const p=Chess3D.pieces[sq];
+    if(!Chess3D.animating[sq]){
+      if(!active[sq]||active[sq].type!==p.type||active[sq].color!==p.color){
+        Chess3D.scene.remove(p.mesh);
+        delete Chess3D.pieces[sq];
+      }
+    }
+  });
+
+  // Add new pieces
+  Object.keys(active).forEach(sq=>{
+    if(!Chess3D.pieces[sq]){
+      const info=active[sq];
+      const mesh=makePiece(info.type,info.color);
+      const [cc,r]=[sq.charCodeAt(0)-97, 8-parseInt(sq[1])];
+      mesh.position.set(cc-3.5,0.12,r-3.5);
+      Chess3D.scene.add(mesh);
+      Chess3D.pieces[sq]={type:info.type,color:info.color,mesh};
+    }
+  });
+
+  // Highlight
+  Chess3D.boardGroup.children.forEach(m=>{
+    if(!m.userData.sq) return;
+    const isSelected=m.userData.sq===Chess3D.selectedSq;
+    m.material.emissive=new THREE.Color(isSelected?0x3b82f6:0x000000);
+    m.material.emissiveIntensity=isSelected?0.5:0;
+  });
+
+  update2D();
+  updateMoveList();
+  if(Chess3D.engineReady) sendToEngine();
+}
+
+function animateMove(fromSq,toSq,cb){
+  // fromSq is where piece WAS (key now deleted from Chess3D.pieces)
+  // But we look up by toSq since the move already happened
+  const p=Chess3D.pieces[toSq];
+  if(!p||!Chess3D.animEnabled){if(cb)cb();return;}
+  const [fc,fr]=[fromSq.charCodeAt(0)-97, 8-parseInt(fromSq[1])];
+  const [tc,tr]=[toSq.charCodeAt(0)-97, 8-parseInt(toSq[1])];
+  const start=new THREE.Vector3(fc-3.5,0.12,fr-3.5);
+  const end=new THREE.Vector3(tc-3.5,0.12,tr-3.5);
+  // Start piece at original position
+  p.mesh.position.copy(start);
+  const t0=performance.now(), dur=380;
+  Chess3D.animating[toSq]=true;
+  function step(){
+    const prog=Math.min((performance.now()-t0)/dur,1);
+    const ease=1-Math.pow(1-prog,3);
+    p.mesh.position.lerpVectors(start,end,ease);
+    p.mesh.position.y=0.12+Math.sin(prog*Math.PI)*0.65;
+    if(prog<1){requestAnimationFrame(step);}
+    else{
+      delete Chess3D.animating[toSq];
+      p.mesh.position.copy(end);
+      playThunk();
+      if(cb)cb();
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+// ── Moves ─────────────────────────────────────────────────────────
+function doMove(moveObj){
+  const from=typeof moveObj==='string'?moveObj.slice(0,2):moveObj.from;
+  const to=typeof moveObj==='string'?moveObj.slice(2,4):moveObj.to;
+  const promo=typeof moveObj==='string'?(moveObj[4]||'q'):'q';
+
+  // Remove captured piece
+  if(Chess3D.pieces[to]){Chess3D.scene.remove(Chess3D.pieces[to].mesh);delete Chess3D.pieces[to];}
+
+  const movingPiece=Chess3D.pieces[from];
+  const mv=Chess3D.game.move({from,to,promotion:promo});
+  if(!mv) return false;
+
+  if(movingPiece){
+    Chess3D.pieces[to]=movingPiece;
+    delete Chess3D.pieces[from];
+    if(Chess3D.animEnabled){
+      // Smooth animation: piece is already at FROM position, animate to TO
+      animateMove(from,to,()=>{syncPieces();});
+    } else {
+      // No animation: instantly place at destination, no disappear
+      const [tc2,tr2]=[to.charCodeAt(0)-97, 8-parseInt(to[1])];
+      movingPiece.mesh.position.set(tc2-3.5,0.12,tr2-3.5);
+      playThunk();
+      syncPieces();
+    }
+  }
+
+  // Auto-rotate for vs friend
+  if(Chess3D.mode==='friend'&&Chess3D.autoRotate){
+    Chess3D.tTheta+=Math.PI;
+  }
+
+  Chess3D.selectedSq=null;
+  syncPieces();
+  playThunk();
+  return true;
+}
+
+function handleSqClick(sq){
+  const g=Chess3D.game;
+  if(Chess3D.mode==='play'&&g.turn()!==Chess3D.userColor) return;
+  if(Chess3D.mode==='comp-vs-comp') return;
+
+  if(Chess3D.selectedSq){
+    if(Chess3D.selectedSq===sq){Chess3D.selectedSq=null;syncPieces();return;}
+    const ok=doMove({from:Chess3D.selectedSq,to:sq,promotion:'q'});
+    if(!ok){
+      const p=g.get(sq);
+      Chess3D.selectedSq=(p&&(Chess3D.mode==='analyze'||p.color===g.turn()))?sq:null;
+    }
+  } else {
+    const p=g.get(sq);
+    if(p&&(Chess3D.mode==='analyze'||p.color===g.turn())) Chess3D.selectedSq=sq;
+  }
+  syncPieces();
+}
+
+// ── 2D board ───────────────────────────────────────────────────────
+function update2D(){
+  const el=document.getElementById('c3d-board2d');
+  if(!el) return;
+  const theme=THEMES[Chess3D.boardTheme]||THEMES.midnight;
+  const hex=n=>'#'+n.toString(16).padStart(6,'0');
+  // Only rebuild if empty (avoid reshape on every sync)
+  if(el.children.length!==64){
+    el.innerHTML='';
+    for(let i=0;i<64;i++){
+      const div=document.createElement('div');
+      div.setAttribute('data-i',i);
+      div.style.cssText='display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;aspect-ratio:1;';
+      div.innerHTML='<img style="width:88%;height:88%;pointer-events:none;display:none;image-rendering:auto" />';
+      el.appendChild(div);
+    }
+  }
+  const divs=el.children;
+  for(let i=0;i<64;i++){
+    const r=7-Math.floor(i/8),cc=i%8;
+    const sq=String.fromCharCode(97+cc)+(r+1);
+    const piece=Chess3D.game.get(sq);
+    const isLight=(r+cc)%2===0;
+    const div=divs[i];
+    div.style.background=hex(isLight?theme.light:theme.dark);
+    div.style.boxShadow=sq===Chess3D.selectedSq?'inset 0 0 0 3px #3b82f6':'';
+    div.onclick=()=>handleSqClick(sq);
+    const img=div.querySelector('img');
+    if(piece){
+      const src=PI[piece.color][piece.type];
+      if(img.src!==src) img.src=src;
+      img.style.display='block';
+    } else {
+      img.style.display='none';
+    }
+  }
+}
+
+// ── Interaction ────────────────────────────────────────────────────
+function setupInteraction(root){
+  const el=Chess3D.renderer.domElement;
+
+  const onDown=e=>{
+    Chess3D.isDragging=true; Chess3D.dragMoved=false;
+    if(e.touches&&e.touches.length===2){
+      Chess3D.pinchDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    } else {
+      const p=e.touches?e.touches[0]:e;
+      Chess3D.startMouse={x:p.clientX,y:p.clientY};
+      Chess3D.prevMouse={...Chess3D.startMouse};
+    }
+    if(AudioCtx.ctx===null){try{AudioCtx.ctx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}}
+  };
+
+  const onMove=e=>{
+    if(!Chess3D.isDragging) return;
+    if(e.touches&&e.touches.length===2){
+      const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+      Chess3D.radius=Math.max(5,Math.min(28,Chess3D.radius-(d-Chess3D.pinchDist)*0.05));
+      Chess3D.pinchDist=d; e.preventDefault(); return;
+    }
+    const p=e.touches?e.touches[0]:e;
+    const dx=p.clientX-Chess3D.prevMouse.x, dy=p.clientY-Chess3D.prevMouse.y;
+    if(Math.abs(p.clientX-Chess3D.startMouse.x)>6||Math.abs(p.clientY-Chess3D.startMouse.y)>6) Chess3D.dragMoved=true;
+    Chess3D.tTheta-=dx*0.007;
+    Chess3D.tPhi=Math.max(0.08,Math.min(Math.PI/2-0.05,Chess3D.tPhi+dy*0.007));
+    Chess3D.prevMouse={x:p.clientX,y:p.clientY};
+  };
+
+  const onUp=e=>{
+    if(Chess3D.isDragging&&!Chess3D.dragMoved){
+      const p=e.changedTouches?e.changedTouches[0]:e;
+      const rc=Chess3D.renderer.domElement.getBoundingClientRect();
+      Chess3D.mouse.x=((p.clientX-rc.left)/rc.width)*2-1;
+      Chess3D.mouse.y=-((p.clientY-rc.top)/rc.height)*2+1;
+      Chess3D.raycaster.setFromCamera(Chess3D.mouse,Chess3D.camera);
+      // Intersect both board squares AND piece meshes (recursive)
+      const allObjs=[...Chess3D.boardGroup.children];
+      Object.values(Chess3D.pieces).forEach(p=>{if(p.mesh)allObjs.push(...p.mesh.children)});
+      const hits=Chess3D.raycaster.intersectObjects(allObjs,true);
+      if(hits.length){
+        // Find which square was hit or which piece's square
+        let hitSq=null;
+        for(const h of hits){
+          if(h.object.userData&&h.object.userData.sq){hitSq=h.object.userData.sq;break;}
+          // Check if hit object is part of a piece - find its square
+          for(const [sq,p] of Object.entries(Chess3D.pieces)){
+            if(p.mesh&&(p.mesh===h.object||p.mesh.children.includes(h.object))){hitSq=sq;break;}
+          }
+          if(hitSq) break;
+        }
+        if(hitSq) handleSqClick(hitSq);
+      }
+    }
+    if(!e.touches||e.touches.length===0){Chess3D.isDragging=false;Chess3D.dragMoved=false;}
+  };
+
+  el.addEventListener('mousedown',onDown);
+  window.addEventListener('mousemove',onMove);
+  window.addEventListener('mouseup',onUp);
+  el.addEventListener('touchstart',onDown,{passive:false});
+  window.addEventListener('touchmove',onMove,{passive:false});
+  window.addEventListener('touchend',onUp);
+  el.addEventListener('wheel',e=>{Chess3D.radius=Math.max(5,Math.min(28,Chess3D.radius+e.deltaY*0.012));e.preventDefault();},{passive:false});
+
+  window.addEventListener('resize',()=>{
+    const r=document.getElementById('c3d-root');
+    if(!r||!Chess3D.renderer) return;
+    Chess3D.renderer.setSize(r.clientWidth,r.clientHeight);
+    Chess3D.camera.aspect=r.clientWidth/r.clientHeight;
+    Chess3D.camera.updateProjectionMatrix();
+  });
+}
+
+function updateCamera(){
+  const {theta,phi,radius,camera}=Chess3D;
+  camera.position.set(radius*Math.sin(phi)*Math.cos(theta),radius*Math.cos(phi),radius*Math.sin(phi)*Math.sin(theta));
+  camera.lookAt(0,0,0);
+}
+
+function updateGlare(){
+  if(!Chess3D.rimLight) return;
+  const col=Chess3D.glareColors[Chess3D.glareColor];
+  if(col===null){Chess3D.rimLight.intensity=0;}
+  else{Chess3D.rimLight.color.set(col);Chess3D.rimLight.intensity=2.2;}
+}
+
+// ── Animate loop ───────────────────────────────────────────────────
+function animate(){
+  requestAnimationFrame(animate);
+  Chess3D.theta+=(Chess3D.tTheta-Chess3D.theta)*0.1;
+  Chess3D.phi+=(Chess3D.tPhi-Chess3D.phi)*0.1;
+  updateCamera();
+  Chess3D.renderer.render(Chess3D.scene,Chess3D.camera);
+}
+
+// ── Engine ─────────────────────────────────────────────────────────
+async function initEngine(){
+  try{
+    const r=await fetch('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');
+    const blob=new Blob([await r.text()],{type:'application/javascript'});
+    Chess3D.stockfish=new Worker(URL.createObjectURL(blob));
+    Chess3D.stockfish.onmessage=e=>{
+      const line=e.data;
+      if(line.startsWith('info depth')){
+        const sc=line.match(/score cp (-?\d+)/);
+        const sm=line.match(/score mate (-?\d+)/);
+        const pv=line.match(/pv ([a-h][1-8][a-h][1-8][qrbn]?)/);
+        if(sc){
+          let v=parseInt(sc[1])/100;
+          if(Chess3D.game.turn()==='b') v=-v;
+          updateEval(v);
+        } else if(sm) updateEval(parseInt(sm[1])>0?15:-15);
+        if(pv&&Chess3D.bestMoveEnabled){
+          const uci=pv[1];
+          const tmp=new Chess(Chess3D.game.fen());
+          const mv=tmp.move({from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]||'q'});
+          const san=mv?mv.san:uci;
+          const bmv=document.getElementById('c3d-best-val');
+          if(bmv) bmv.textContent=san;
+        }
+      }
+      if(line.startsWith('bestmove')){
+        const mv=line.split(' ')[1];
+        if(mv&&mv!=='(none)'){
+          const should=(Chess3D.mode==='play'&&Chess3D.game.turn()!==Chess3D.userColor)||Chess3D.mode==='comp-vs-comp';
+          if(should) setTimeout(()=>doMove(mv),500);
+        }
+      }
+    };
+    Chess3D.stockfish.postMessage('uci');
+    Chess3D.stockfish.postMessage('isready');
+    Chess3D.engineReady=true;
+    populateLevels();
+  }catch(e){console.log('Engine error',e);}
+}
+
+function populateLevels(){
+  ['c3d-level','c3d-level-w','c3d-level-b'].forEach(id=>{
+    const sel=document.getElementById(id);
+    if(!sel) return;
+    sel.innerHTML='';
+    for(let i=1;i<=20;i++){
+      const o=document.createElement('option');
+      o.value=i; o.textContent=`Lvl ${i} (~${ELO[i]})`;
+      if(i===5) o.selected=true;
+      sel.appendChild(o);
+    }
+  });
+}
+
+function sendToEngine(){
+  if(!Chess3D.engineReady||!Chess3D.stockfish) return;
+  const sf=Chess3D.stockfish;
+  const isWhiteTurn=Chess3D.game.turn()==='w';
+  // In comp-vs-comp, use separate white/black settings
+  const lvId=Chess3D.mode==='comp-vs-comp'?(isWhiteTurn?'c3d-level-w':'c3d-level-b'):'c3d-level';
+  const stId=Chess3D.mode==='comp-vs-comp'?(isWhiteTurn?'c3d-style-w':'c3d-style-b'):'c3d-style';
+  const lv=parseInt((document.getElementById(lvId)||{value:5}).value||5);
+  const style=BOT_STYLES.find(s=>s.id===(document.getElementById(stId)||{value:'balanced'}).value)||BOT_STYLES[0];
+  sf.postMessage(`position fen ${Chess3D.game.fen()}`);
+  sf.postMessage(`setoption name Skill Level value ${lv}`);
+  sf.postMessage(`setoption name Contempt value ${style.contempt}`);
+  sf.postMessage('go depth 13');
+}
+
+function updateEval(v){
+  const fill=document.getElementById('c3d-eval-fill');
+  const txt=document.getElementById('c3d-eval-txt');
+  if(!fill||!txt) return;
+  const pct=Math.max(2,Math.min(98,50+v*7));
+  fill.style.height=pct+'%';
+  txt.textContent=(v>=0?'+':'')+v.toFixed(1);
+}
+
+// ── Move list ─────────────────────────────────────────────────────
+function updateMoveList(){
+  const el=document.getElementById('c3d-move-list');
+  if(!el) return;
+  const hist=Chess3D.game.history();
+  if(!hist.length){el.innerHTML='<span style="color:rgba(255,255,255,.3);font-size:11px">No moves yet</span>';return;}
+  let html='';
+  for(let i=0;i<hist.length;i+=2){
+    const num=Math.floor(i/2)+1;
+    const w=hist[i]||'';
+    const b=hist[i+1]||'';
+    html+=`<span style="color:rgba(255,255,255,.4);margin-right:3px;font-size:10px">${num}.</span><span style="color:#fff;font-weight:600;font-size:11px;margin-right:6px">${w}</span>${b?`<span style="color:#cbd5e1;font-size:11px;margin-right:8px">${b}</span>`:''}`;
+  }
+  el.innerHTML=html;
+  el.scrollTop=el.scrollHeight;
+}
+
+// ── Coordinates ────────────────────────────────────────────────────
+function setCoordVis(show){
+  Chess3D.showCoords=show;
+  if(!Chess3D.boardGroup) return;
+  Chess3D.boardGroup.children.forEach(m=>{
+    if(m.geometry&&m.geometry.type==='PlaneGeometry') m.visible=show;
+  });
+}
+
+// ── UI Wiring ──────────────────────────────────────────────────────
+function wireUI(){
+  const get=id=>document.getElementById(id);
+
+  // Mode
+  const modeSelect=get('c3d-mode');
+  if(modeSelect) modeSelect.onchange=e=>{
+    Chess3D.mode=e.target.value;
+    const isCvC=Chess3D.mode==='comp-vs-comp';
+    get('c3d-engine-row')&&(get('c3d-engine-row').style.display=['play','comp-vs-comp'].includes(Chess3D.mode)?'flex':'none');
+    get('c3d-white-engine-row')&&(get('c3d-white-engine-row').style.display=isCvC?'flex':'none');
+    get('c3d-black-engine-row')&&(get('c3d-black-engine-row').style.display=isCvC?'flex':'none');
+    get('c3d-friend-row')&&(get('c3d-friend-row').style.display=Chess3D.mode==='friend'?'':'none');
+    get('c3d-status').textContent=Chess3D.mode.toUpperCase().replace(/-/g,' ');
+    syncPieces();
+  };
+
+  // Board theme
+  const boardSel=get('c3d-board');
+  if(boardSel) boardSel.onchange=e=>{Chess3D.boardTheme=e.target.value;buildBoard();syncPieces();};
+
+  // Piece style
+  const pieceSel=get('c3d-piece');
+  if(pieceSel) pieceSel.onchange=e=>{
+    Chess3D.pieceStyle=e.target.value;
+    // Remove and re-add all pieces
+    Object.values(Chess3D.pieces).forEach(p=>Chess3D.scene.remove(p.mesh));
+    Chess3D.pieces={};
+    syncPieces();
+  };
+
+  // BG
+  const bgSel=get('c3d-bg');
+  if(bgSel) bgSel.onchange=e=>{Chess3D.bgStyle=e.target.value;setBg();};
+
+  // Glare
+  const glareSel=get('c3d-glare');
+  if(glareSel) glareSel.onchange=e=>{Chess3D.glareColor=e.target.value;updateGlare();};
+
+  // View mode 2D/3D
+  const viewSel=get('c3d-view');
+  if(viewSel) viewSel.onchange=e=>{
+    const is2d=e.target.value==='2d';
+    const brd2d=get('c3d-board2d-wrap');
+    if(brd2d) brd2d.style.display=is2d?'flex':'none';
+    Chess3D.renderer.domElement.style.display=is2d?'none':'block';
+    if(is2d) update2D();
+  };
+
+  // Sound
+  const sndSel=get('c3d-sound');
+  if(sndSel) sndSel.onchange=e=>{Chess3D.soundEnabled=e.target.value==='true';};
+
+  // Anim
+  const animSel=get('c3d-anim');
+  if(animSel) animSel.onchange=e=>{Chess3D.animEnabled=e.target.value==='true';};
+
+  // Auto-rotate (for vs friend)
+  const rotSel=get('c3d-autorotate');
+  if(rotSel) rotSel.onchange=e=>{Chess3D.autoRotate=e.target.value==='true';};
+
+  // Side
+  const sideSel=get('c3d-side');
+  if(sideSel) sideSel.onchange=e=>{Chess3D.userColor=e.target.value;Chess3D.tTheta=Chess3D.userColor==='w'?Math.PI/2:-Math.PI/2;};
+
+  // Coordinates toggle
+  const coordSel=get('c3d-coords');
+  if(coordSel) coordSel.onchange=e=>setCoordVis(e.target.value==='true');
+
+  // Move list toggle
+  const mlBtn=get('c3d-btn-movelist');
+  if(mlBtn) mlBtn.onclick=()=>{
+    const ml=get('c3d-movelist-wrap');
+    if(!ml) return;
+    const vis=ml.style.display!=='none';
+    ml.style.display=vis?'none':'';
+    mlBtn.textContent=vis?'Show Moves':'Hide Moves';
+  };
+
+  // Comp-vs-comp white level/style
+  const wlvSel=get('c3d-level-w');
+  if(wlvSel){
+    wlvSel.innerHTML='';
+    for(let i=1;i<=20;i++){const o=document.createElement('option');o.value=i;o.textContent=`Lvl ${i} (~${ELO[i]})`;if(i===5)o.selected=true;wlvSel.appendChild(o);}
+    wlvSel.onchange=()=>sendToEngine();
+  }
+  const wstSel=get('c3d-style-w');
+  if(wstSel){
+    wstSel.innerHTML=BOT_STYLES.map(s=>`<option value="${s.id}">${s.label}</option>`).join('');
+    wstSel.onchange=()=>sendToEngine();
+  }
+  const bstSel=get('c3d-style-b');
+  if(bstSel){
+    bstSel.innerHTML=BOT_STYLES.map(s=>`<option value="${s.id}">${s.label}</option>`).join('');
+    bstSel.onchange=()=>sendToEngine();
+  }
+  const blvSel=get('c3d-level-b');
+  if(blvSel){ blvSel.onchange=()=>sendToEngine(); }
+
+  // Eval toggle
+  const evBtn=get('c3d-btn-eval');
+  if(evBtn) evBtn.onclick=()=>{
+    Chess3D.evalVisible=!Chess3D.evalVisible;
+    const ew=get('c3d-eval-wrap');if(ew) ew.style.display=Chess3D.evalVisible?'':'none';
+    evBtn.textContent=Chess3D.evalVisible?'Hide Eval':'Show Eval';
+  };
+
+  // Best move toggle
+  const bmBtn=get('c3d-btn-bm');
+  if(bmBtn) bmBtn.onclick=()=>{
+    Chess3D.bestMoveEnabled=!Chess3D.bestMoveEnabled;
+    const bmw=get('c3d-bm-wrap');if(bmw) bmw.style.display=Chess3D.bestMoveEnabled?'':'none';
+    bmBtn.textContent=Chess3D.bestMoveEnabled?'Hide Best':'Show Best';
+  };
+
+  // Settings panel toggle
+  const setBtn=get('c3d-btn-settings');
+  const setPanel=get('c3d-settings-panel');
+  if(setBtn&&setPanel) setBtn.onclick=()=>{
+    const vis=setPanel.style.display!=='none';
+    setPanel.style.display=vis?'none':'';
+    setBtn.textContent=vis?'⚙ Settings':'✕ Settings';
+  };
+
+  // Undo
+  const undoBtn=get('c3d-btn-undo');
+  if(undoBtn) undoBtn.onclick=()=>{
+    Chess3D.game.undo();
+    if(Chess3D.mode==='play') Chess3D.game.undo();
+    Object.values(Chess3D.pieces).forEach(p=>Chess3D.scene.remove(p.mesh));
+    Chess3D.pieces={};
+    syncPieces();
+  };
+
+  // Reset
+  const resetBtn=get('c3d-btn-reset');
+  if(resetBtn) resetBtn.onclick=()=>{
+    Chess3D.game.reset(); Chess3D.selectedSq=null;
+    Object.values(Chess3D.pieces).forEach(p=>Chess3D.scene.remove(p.mesh));
+    Chess3D.pieces={};
+    syncPieces();
+  };
+
+  // Recenter
+  const recBtn=get('c3d-btn-recenter');
+  if(recBtn) recBtn.onclick=()=>{
+    Chess3D.tTheta=Chess3D.userColor==='w'?Math.PI/2:-Math.PI/2;
+    Chess3D.tPhi=Math.PI/3.5;
+    Chess3D.radius=14;
+  };
+
+  // Flip
+  const flipBtn=get('c3d-btn-flip');
+  if(flipBtn) flipBtn.onclick=()=>{Chess3D.tTheta+=Math.PI;};
+
+  // Copy PGN
+  const pgnBtn=get('c3d-btn-pgn');
+  if(pgnBtn) pgnBtn.onclick=()=>{
+    const ta=document.createElement('textarea');
+    ta.value=Chess3D.game.pgn()||'No moves yet';
+    document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+    pgnBtn.textContent='✓ Copied!';setTimeout(()=>pgnBtn.textContent='Copy PGN',1500);
+  };
+
+  // WC level / style selectors
+  const lvSel=get('c3d-level'); if(lvSel) lvSel.onchange=()=>sendToEngine();
+  const stSel=get('c3d-style');
+  if(stSel){
+    stSel.innerHTML=BOT_STYLES.map(s=>`<option value="${s.id}">${s.label}</option>`).join('');
+    stSel.onchange=()=>{
+      const sty=BOT_STYLES.find(s=>s.id===stSel.value);
+      const desc=get('c3d-style-desc');
+      if(desc&&sty) desc.textContent=sty.desc;
+      sendToEngine();
+    };
+  }
+}
+
+// ── Expose ─────────────────────────────────────────────────────────
+window.chess3dInit=function(){
+  if(Chess3D.started) return;
+  Chess3D.started=true;
+  init();
+};
+window.chess3dReset=function(){
+  if(!Chess3D.started) return;
+  Chess3D.game.reset(); Chess3D.selectedSq=null;
+  Object.values(Chess3D.pieces).forEach(p=>Chess3D.scene.remove(p.mesh));
+  Chess3D.pieces={};
+  syncPieces();
+};
+
+})();
+
+</script>
+
+<script>
+/* ══ Chess64 3D helpers ═══════════════════════════════════════════ */
+function chess3dShowGame(){
+  var lnd=document.getElementById('chess3d-landing');
+  var panel=document.getElementById('chess3d-game-panel');
+  if(lnd) lnd.style.display='none';
+  if(panel) panel.style.display='block';
+  setTimeout(function(){
+    if(typeof window.chess3dInit==='function') window.chess3dInit();
+  },80);
+}
+function chess3dHideGame(){
+  var lnd=document.getElementById('chess3d-landing');
+  var panel=document.getElementById('chess3d-game-panel');
+  if(lnd) lnd.style.display='block';
+  if(panel) panel.style.display='none';
+}
+/* ══ City Dash helpers ════════════════════════════════════════════ */
+function cityDashShow(){
+  var main=document.getElementById('tilted-main-content');
+  var game=document.getElementById('tilted-game-panel');
+  var panel=document.getElementById('city-dash-panel');
+  if(main) main.style.display='none';
+  if(game) game.style.display='none';
+  if(panel) panel.style.display='block';
+  setTimeout(function(){
+    if(typeof window.cityDashInit==='function') window.cityDashInit();
+    window.dispatchEvent(new Event('resize'));
+  },100);
+}
+function cityDashHide(){
+  var main=document.getElementById('tilted-main-content');
+  var panel=document.getElementById('city-dash-panel');
+  if(main) main.style.display='block';
+  if(panel) panel.style.display='none';
+}
+
+/* ══ City Dash helpers ══════════════════════════════════════════ */
+/* neonRunnerShow removed */_nrs=function(){
+  var main=document.getElementById('tilted-main-content');
+  var game=document.getElementById('tilted-game-panel');
+  var panel=document.getElementById('neon-runner-panel');
+  if(main) main.style.display='none';
+  if(game) game.style.display='none';
+  if(panel) panel.style.display='block';
+  setTimeout(function(){
+    if(typeof window.neonRunnerStart==='function') window.neonRunnerStart();
+    var wrap=document.getElementById('neon-runner-canvas-wrap');
+    if(wrap) window.dispatchEvent(new Event('resize'));
+  },150);
+}
+/* neonRunnerHide removed */_nrh=function(){
+  var main=document.getElementById('tilted-main-content');
+  var panel=document.getElementById('neon-runner-panel');
+  if(main) main.style.display='block';
+  if(panel) panel.style.display='none';
+}
+
+/* ══ Home demo animation — respect piece-anim toggle ═════════════ */
+(function(){
+  var _origToggle=window.togglePieceAnim;
+  window.togglePieceAnim=function(){
+    if(_origToggle) _origToggle.apply(this,arguments);
+    var on=typeof _animatePieces!=='undefined'?_animatePieces:true;
+    var el=document.getElementById('home-demo-board');
+    if(el) el.style.opacity=on?'1':'0.35';
+    if(!on&&typeof _hdInt!=='undefined'&&_hdInt){clearInterval(_hdInt);_hdInt=null;}
+    else if(on&&!_hdInt&&typeof initHomeDemo==='function') initHomeDemo();
   };
 })();
 </script>
-
 </body></html>
