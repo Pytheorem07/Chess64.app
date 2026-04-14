@@ -26377,9 +26377,7 @@ function localParentalRefreshPanel(){
           +'<div style="width:40px;height:22px;border-radius:11px;background:'+(isBlocked?'var(--accent)':'#555')+';position:relative;cursor:pointer;transition:background .2s;flex-shrink:0" '
           +'onclick="localParentalTogglePage(\''+page+'\')">'
           +'<div style="position:absolute;top:3px;'+(isBlocked?'left:20px':'left:3px')+';width:16px;height:16px;background:white;border-radius:50%;transition:left .2s"></div>'
-          +'</div>'
-
-</div>';
+          +'</div></div>';
       }).join('');
     togglesEl.style.display='block';
   } else if(togglesEl){
@@ -26665,6 +26663,18 @@ window.tiltedHideGame=function(){
             <option value="true">Visible</option><option value="false">Hidden</option>
           </select>
         </div>
+        <div style="display:flex;align-items:center;gap:5px;background:var(--bg3);border-radius:7px;padding:4px 8px;border:1px solid rgba(255,255,255,.07)" title="Tunnels and bridges appear every ~400m">
+          <span style="font-size:10px;color:var(--text2);font-weight:600">🌉 Zones</span>
+          <select id="cr-zone-toggle" style="font-size:11px;padding:2px 4px;border-radius:5px;background:transparent;color:var(--text1);border:none;outline:none;cursor:pointer">
+            <option value="false">Off</option><option value="true">On</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;background:var(--bg3);border-radius:7px;padding:4px 8px;border:1px solid rgba(255,255,255,.07)" title="Dense fog in tunnels — harder visibility! Appears in tunnel zones only">
+          <span style="font-size:10px;color:var(--text2);font-weight:600">🌫 Fog</span>
+          <select id="cr-fog-toggle" style="font-size:11px;padding:2px 4px;border-radius:5px;background:transparent;color:var(--text1);border:none;outline:none;cursor:pointer">
+            <option value="false">Off</option><option value="true">On (harder!)</option>
+          </select>
+        </div>
         <div style="display:flex;align-items:center;gap:5px;background:var(--bg3);border-radius:7px;padding:4px 8px;border:1px solid rgba(255,255,255,.07)">
           <span style="font-size:10px;color:var(--text2);font-weight:600">🌆 Scenery</span>
           <select id="cr-scenery-toggle" style="font-size:11px;padding:2px 4px;border-radius:5px;background:transparent;color:var(--text1);border:none;outline:none;cursor:pointer">
@@ -26678,6 +26688,17 @@ window.tiltedHideGame=function(){
           <span style="font-size:10px;color:var(--text2);font-weight:600">🎮 Buttons</span>
           <select id="cr-keys-toggle" style="font-size:11px;padding:2px 4px;border-radius:5px;background:transparent;color:var(--text1);border:none;outline:none;cursor:pointer">
             <option value="false">Hidden</option><option value="true">Visible</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;background:var(--bg3);border-radius:7px;padding:4px 8px;border:1px solid rgba(255,255,255,.07)">
+          <span style="font-size:10px;color:var(--text2);font-weight:600">👤 Character</span>
+          <select id="cr-char-toggle" style="font-size:11px;padding:2px 4px;border-radius:5px;background:transparent;color:var(--text1);border:none;outline:none;cursor:pointer">
+            <option value="runner">🏃 Runner</option>
+            <option value="racer">🏎 Racer</option>
+            <option value="knight">♞ Knight</option>
+            <option value="ghost">👻 Ghost</option>
+            <option value="robot">🤖 Robot</option>
+            <option value="pawn">♟ Pawn</option>
           </select>
         </div>
       </div>
@@ -26757,7 +26778,8 @@ window.tiltedHideGame=function(){
 'use strict';
 
 const CR = {
-  paused:false, doubleJumpEnabled:true, hardMode:false, scenery:'city',
+  paused:false, doubleJumpEnabled:true, hardMode:'normal', scenery:'city',
+  showTracks:true, character:'runner', fogZones:false, zoneSwitch:false,
   scene:null, camera:null, renderer:null, clock:null,
   player:null, obstacles:[], coins:[], powerups:[],
   speed:0.22, score:0, hiScore:0, hiSpeed:0, dist:0,
@@ -26919,9 +26941,21 @@ function spawnTrack(zPos){
   CR.tracks.push({mesh:grp,z:zPos});
 }
 
+
+// ── Characters ──────────────────────────────────────────────────────
+const CHARACTERS={
+  runner:{label:'🏃 Runner',color:0x00d4ff,emissive:0x00d4ff,scale:1.0},
+  racer:{label:'🏎 Racer',color:0xf97316,emissive:0xf97316,scale:0.9},
+  knight:{label:'♞ Knight',color:0xd4af37,emissive:0xffd700,scale:1.1},
+  ghost:{label:'👻 Ghost',color:0x8b5cf6,emissive:0x7c3aed,scale:1.0},
+  robot:{label:'🤖 Robot',color:0x64748b,emissive:0x38bdf8,scale:1.05},
+  pawn:{label:'♟ Pawn',color:0xeeeeee,emissive:0xaaaaaa,scale:1.0}
+};
 function buildPlayer(){
   const g=new THREE.Group();
-  const mat=new THREE.MeshPhongMaterial({color:COLORS.player,emissive:COLORS.player,emissiveIntensity:0.4});
+  const charDef=CHARACTERS[CR.character]||CHARACTERS.runner;
+  const mat=new THREE.MeshPhongMaterial({color:charDef.color,emissive:charDef.emissive,emissiveIntensity:0.5});
+  g.scale.setScalar(charDef.scale);
   // Body (capsule approximation)
   const body=new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.45,1.1,12),mat);
   const head=new THREE.Mesh(new THREE.SphereGeometry(0.45,12,12),mat);
@@ -26929,7 +26963,7 @@ function buildPlayer(){
   const bot=new THREE.Mesh(new THREE.SphereGeometry(0.45,12,12),mat);
   bot.position.y=-0.85;
   // Trail light
-  const trail=new THREE.PointLight(COLORS.player,2.5,8);
+  const trail=new THREE.PointLight(charDef.color,2.5,8);
   trail.position.set(0,0,1);
   g.add(body,head,bot,trail);
   g.position.set(LANES[CR.lane],1.3,0);
@@ -27089,6 +27123,24 @@ function loop(){
 
   // Score
   CR.dist+=spd*60*dt;
+  // Environment zones (only when enabled)
+  var zone=CR.zoneSwitch ? Math.floor(CR.dist/400) : 0;
+  CR.currentZone=zone;
+  if(CR.scene){
+    var inTunnel=CR.fogZones&&CR.zoneSwitch&&(zone%4===2);
+    var onBridge=CR.zoneSwitch&&(zone%4===3);
+    if(inTunnel){
+      CR.scene.fog.near=5; CR.scene.fog.far=30;
+      CR.scene.background.set(0x020408);
+    } else if(onBridge){
+      CR.scene.fog.near=20; CR.scene.fog.far=120;
+      CR.scene.background.set(0x0a1520);
+    } else {
+      var pal2=({city:{fog:0x050a12},sunset:{fog:0x200a04},rainy:{fog:0x050510},neon:{fog:0x080012}})[CR.scenery]||{fog:0x050a12};
+      CR.scene.background.set(pal2.fog);
+      CR.scene.fog.near=30; CR.scene.fog.far=90;
+    }
+  }
   CR.score=Math.floor(CR.dist/60)+Math.floor(CR.score/5)*5;
   updateHUD();
 
@@ -27115,6 +27167,33 @@ function renderIdle(){
   CR.renderer.render(CR.scene,CR.camera);
 }
 
+function spawnZoneDecor(){
+  // Spawn tunnel arch or bridge element based on current zone
+  var zone=CR.currentZone||0;
+  if(zone%4===2){
+    // Tunnel: dark arches with neon strips
+    var arch=new THREE.Group();
+    var archMat=new THREE.MeshLambertMaterial({color:0x0a0a0a});
+    var top=new THREE.Mesh(new THREE.BoxGeometry(10,1.5,0.8),archMat); top.position.y=8.5; arch.add(top);
+    var sL=new THREE.Mesh(new THREE.BoxGeometry(0.8,8,0.8),archMat); sL.position.set(-5,4,0); arch.add(sL);
+    var sR=new THREE.Mesh(new THREE.BoxGeometry(0.8,8,0.8),archMat); sR.position.set(5,4,0); arch.add(sR);
+    var strip=new THREE.Mesh(new THREE.BoxGeometry(9,0.15,0.15),new THREE.MeshBasicMaterial({color:0xff44aa}));
+    strip.position.y=9; arch.add(strip);
+    arch.position.z=-55;
+    CR.scene.add(arch);
+    CR.zoneDecor=CR.zoneDecor||[];
+    CR.zoneDecor.push({mesh:arch});
+  } else if(zone%4===3){
+    // Bridge: railings
+    [-4.5,4.5].forEach(function(x){
+      var rail=new THREE.Mesh(new THREE.BoxGeometry(0.3,1.8,40),new THREE.MeshLambertMaterial({color:0x4a5568}));
+      rail.position.set(x,0.9,-40);
+      CR.scene.add(rail);
+      CR.zoneDecor=CR.zoneDecor||[];
+      CR.zoneDecor.push({mesh:rail});
+    });
+  }
+}
 function spawnObstacle(){
   const lane=Math.floor(Math.random()*3);
   const types=['bus','barrier','crate'];
@@ -27228,12 +27307,15 @@ function wireUI(){
   el('cr-dj-toggle')&&(el('cr-dj-toggle').onchange=e=>{CR.doubleJumpEnabled=e.target.value==='true';});
   el('cr-hard-toggle')&&(el('cr-hard-toggle').onchange=e=>{CR.hardMode=e.target.value==='true';});
   el('cr-scenery-toggle')&&(el('cr-scenery-toggle').onchange=e=>{CR.scenery=e.target.value;if(CR.started)rebuildScenery();});
+  el('cr-char-toggle')&&(el('cr-char-toggle').onchange=e=>{CR.character=e.target.value;if(CR.scene&&CR.player){CR.scene.remove(CR.player);buildPlayer();}});
   el('cr-keys-toggle')&&(el('cr-keys-toggle').onchange=e=>{
     const show=e.target.value==='true';
     ['cr-btn-left','cr-btn-right','cr-btn-jump'].forEach(id=>{const b=el(id);if(b)b.style.display=show?'':'none';});
   });
   el('cr-hard-toggle')&&(el('cr-hard-toggle').onchange=e=>{CR.hardMode=e.target.value;});
   el('cr-tracks-toggle')&&(el('cr-tracks-toggle').onchange=e=>{CR.showTracks=e.target.value==='true';});
+  el('cr-zone-toggle')&&(el('cr-zone-toggle').onchange=e=>{CR.zoneSwitch=e.target.value==='true';});
+  el('cr-fog-toggle')&&(el('cr-fog-toggle').onchange=e=>{CR.fogZones=e.target.value==='true';});
 }
 
 function rebuildScenery(){
@@ -27264,7 +27346,7 @@ window.cityDashInit=function(){
 <!-- ══════════════════════ CHESS64 3D PAGE ══════════════════════ -->
 <div class="page" id="page-chess3d">
 <div class="container" style="max-width:1200px">
-  <div id="chess3d-landing">
+  <div id="chess3d-landing" style="min-height:calc(100vh - 120px)">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
       <div><h1 style="margin:0">♟ Chess64 3D</h1>
       <p style="color:var(--text2);font-size:13px;margin:4px 0 0">Experience chess like never before.</p></div>
@@ -27868,79 +27950,101 @@ function update2D(){
 function setupInteraction(root){
   const el=Chess3D.renderer.domElement;
 
-  let _tapTime=0, _tapX=0, _tapY=0;
-  const onDown=e=>{
-    Chess3D.isDragging=true; Chess3D.dragMoved=false;
-    if(e.touches&&e.touches.length===2){
-      Chess3D.pinchDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
-    } else {
-      const p=e.touches?e.touches[0]:e;
-      Chess3D.startMouse={x:p.clientX,y:p.clientY};
-      Chess3D.prevMouse={...Chess3D.startMouse};
-      _tapTime=Date.now(); _tapX=p.clientX; _tapY=p.clientY;
+  // Touch state: track start position for reliable tap detection
+  let _touchId=-1, _touchX0=0, _touchY0=0, _touchMoved=false;
+  let _mouseDown=false, _mouseMoved=false;
+
+  const onMouseDown=e=>{
+    _mouseDown=true; _mouseMoved=false;
+    Chess3D.startMouse={x:e.clientX,y:e.clientY};
+    Chess3D.prevMouse={x:e.clientX,y:e.clientY};
+    if(AudioCtx.ctx===null){try{AudioCtx.ctx=new(window.AudioContext||window.webkitAudioContext)();}catch(ex){}}
+  };
+  const onMouseMove=e=>{
+    if(!_mouseDown) return;
+    if(Math.abs(e.clientX-Chess3D.startMouse.x)>5||Math.abs(e.clientY-Chess3D.startMouse.y)>5) _mouseMoved=true;
+    Chess3D.tTheta-=(e.clientX-Chess3D.prevMouse.x)*0.007;
+    Chess3D.tPhi=Math.max(0.08,Math.min(Math.PI/2-0.05,Chess3D.tPhi+(e.clientY-Chess3D.prevMouse.y)*0.007));
+    Chess3D.prevMouse={x:e.clientX,y:e.clientY};
+  };
+  const onMouseUp=e=>{
+    if(_mouseDown&&!_mouseMoved){
+      const rc=Chess3D.renderer.domElement.getBoundingClientRect();
+      Chess3D.mouse.x=((e.clientX-rc.left)/rc.width)*2-1;
+      Chess3D.mouse.y=-((e.clientY-rc.top)/rc.height)*2+1;
+      Chess3D.raycaster.setFromCamera(Chess3D.mouse,Chess3D.camera);
+      doRaycast();
     }
-    if(AudioCtx.ctx===null){try{AudioCtx.ctx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}}
+    _mouseDown=false; _mouseMoved=false;
   };
 
-  const onMove=e=>{
-    if(!Chess3D.isDragging) return;
-    if(e.touches&&e.touches.length===2){
+  const onTouchStart=e=>{
+    if(AudioCtx.ctx===null){try{AudioCtx.ctx=new(window.AudioContext||window.webkitAudioContext)();}catch(ex){}}
+    if(e.touches.length===2){
+      Chess3D.pinchDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+      _touchId=-1; return;
+    }
+    if(e.touches.length===1){
+      const t=e.touches[0];
+      _touchId=t.identifier; _touchX0=t.clientX; _touchY0=t.clientY; _touchMoved=false;
+      Chess3D.prevMouse={x:t.clientX,y:t.clientY};
+    }
+    e.preventDefault();
+  };
+  const onTouchMove=e=>{
+    if(e.touches.length===2){
       const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
       Chess3D.radius=Math.max(5,Math.min(28,Chess3D.radius-(d-Chess3D.pinchDist)*0.05));
       Chess3D.pinchDist=d; e.preventDefault(); return;
     }
-    const p=e.touches?e.touches[0]:e;
-    const dx=p.clientX-Chess3D.startMouse.x, dy=p.clientY-Chess3D.startMouse.y;
-    // Higher threshold for touch (12px) vs mouse (4px) to avoid false drags on mobile
-    const threshold=e.touches?18:5;
-    if(Math.abs(dx)>threshold||Math.abs(dy)>threshold) Chess3D.dragMoved=true;
-    Chess3D.tTheta-=(p.clientX-Chess3D.prevMouse.x)*0.007;
-    Chess3D.tPhi=Math.max(0.08,Math.min(Math.PI/2-0.05,Chess3D.tPhi+(p.clientY-Chess3D.prevMouse.y)*0.007));
-    Chess3D.prevMouse={x:p.clientX,y:p.clientY};
+    const t=Array.from(e.changedTouches).find(t2=>t2.identifier===_touchId);
+    if(!t) return;
+    if(Math.abs(t.clientX-_touchX0)>22||Math.abs(t.clientY-_touchY0)>22) _touchMoved=true;
+    Chess3D.tTheta-=(t.clientX-Chess3D.prevMouse.x)*0.007;
+    Chess3D.tPhi=Math.max(0.08,Math.min(Math.PI/2-0.05,Chess3D.tPhi+(t.clientY-Chess3D.prevMouse.y)*0.007));
+    Chess3D.prevMouse={x:t.clientX,y:t.clientY};
+    e.preventDefault();
   };
-
-  const onUp=e=>{
-    const isTouch=!!e.changedTouches;
-    const pt=e.changedTouches?e.changedTouches[0]:e; // renamed to pt to avoid shadowing
-    // Tap = no significant movement AND short duration
-    const tapDist=Math.hypot(pt.clientX-_tapX,pt.clientY-_tapY);
-    const tapDur=Date.now()-_tapTime;
-    // More lenient tap threshold for touch: 20px, 600ms
-    const isTap=!Chess3D.dragMoved&&(!isTouch||(tapDist<20&&tapDur<600));
-    if(Chess3D.isDragging&&isTap){
+  const onTouchEnd=e=>{
+    const t=Array.from(e.changedTouches).find(t2=>t2.identifier===_touchId);
+    if(!t){_touchId=-1;return;}
+    if(!_touchMoved){
       const rc=Chess3D.renderer.domElement.getBoundingClientRect();
-      Chess3D.mouse.x=((pt.clientX-rc.left)/rc.width)*2-1;
-      Chess3D.mouse.y=-((pt.clientY-rc.top)/rc.height)*2+1;
+      Chess3D.mouse.x=((t.clientX-rc.left)/rc.width)*2-1;
+      Chess3D.mouse.y=-((t.clientY-rc.top)/rc.height)*2+1;
       Chess3D.raycaster.setFromCamera(Chess3D.mouse,Chess3D.camera);
-      // Intersect board squares AND all piece mesh children (no variable shadowing)
-      const allObjs=[...Chess3D.boardGroup.children];
-      Object.values(Chess3D.pieces).forEach(piece=>{
-        if(piece.mesh) piece.mesh.children.forEach(ch=>allObjs.push(ch));
-      });
-      const hits=Chess3D.raycaster.intersectObjects(allObjs,true);
-      let hitSq=null;
-      for(const h of hits){
-        if(h.object.userData&&h.object.userData.sq){hitSq=h.object.userData.sq;break;}
-        for(const [sq,piece] of Object.entries(Chess3D.pieces)){
-          if(piece.mesh&&(piece.mesh===h.object||piece.mesh.children.includes(h.object))){hitSq=sq;break;}
-        }
-        if(hitSq) break;
-      }
-      if(hitSq) handleSqClick(hitSq);
+      doRaycast();
     }
-    if(!e.touches||e.touches.length===0){Chess3D.isDragging=false;Chess3D.dragMoved=false;}
+    _touchId=-1; _touchMoved=false;
   };
-
-  el.addEventListener('mousedown',onDown);
-  window.addEventListener('mousemove',onMove);
-  window.addEventListener('mouseup',onUp);
-  el.addEventListener('touchstart',onDown,{passive:false});
-  el.addEventListener('touchmove',onMove,{passive:false});
-  window.addEventListener('touchmove',onMove,{passive:false});
-  el.addEventListener('touchend',onUp,{passive:false});
-  window.addEventListener('touchend',onUp);
-  el.addEventListener('wheel',e=>{Chess3D.radius=Math.max(5,Math.min(28,Chess3D.radius+e.deltaY*0.012));e.preventDefault();},{passive:false});
-
+  function doRaycast(){
+    const allObjs=[...Chess3D.boardGroup.children];
+    Object.values(Chess3D.pieces).forEach(piece=>{
+      if(piece.mesh) piece.mesh.children.forEach(ch=>allObjs.push(ch));
+    });
+    const hits=Chess3D.raycaster.intersectObjects(allObjs,true);
+    let hitSq=null;
+    for(const h of hits){
+      if(h.object.userData&&h.object.userData.sq){hitSq=h.object.userData.sq;break;}
+      for(const [sq,piece] of Object.entries(Chess3D.pieces)){
+        if(piece.mesh&&piece.mesh.children.includes(h.object)){hitSq=sq;break;}
+      }
+      if(hitSq) break;
+    }
+    if(hitSq) handleSqClick(hitSq);
+  }
+  // ── Register all events ──────────────────────────────────────────
+  el.addEventListener('mousedown', onMouseDown);
+  window.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('mouseup', onMouseUp);
+  el.addEventListener('touchstart', onTouchStart, {passive:false});
+  el.addEventListener('touchmove',  onTouchMove,  {passive:false});
+  el.addEventListener('touchend',   onTouchEnd,   {passive:false});
+  window.addEventListener('touchend', onTouchEnd, {passive:false});
+  el.addEventListener('wheel', e=>{
+    Chess3D.radius=Math.max(5,Math.min(28,Chess3D.radius+e.deltaY*0.012));
+    e.preventDefault();
+  },{passive:false});
   window.addEventListener('resize',()=>{
     const r=document.getElementById('c3d-root');
     if(!r||!Chess3D.renderer) return;
