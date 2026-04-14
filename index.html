@@ -6386,6 +6386,13 @@ function navTo(page){
   document.querySelectorAll(`.nav-btn[data-page="${page}"],.nav-dd-item[data-page="${page}"]`).forEach(b=>b.classList.add('active'));
   // Hide city dash panel when leaving tilted page
   if(page!=='tilted'){var _cdp=document.getElementById('city-dash-panel');if(_cdp&&_cdp.style.display==='block'){_cdp.style.display='none';var _tm=document.getElementById('tilted-main-content');if(_tm)_tm.style.display='block';}}
+  // Hide mario dpad when leaving tilted page
+  if(page!=='tilted'){
+    var _mdp=document.getElementById('mario-dpad-overlay');
+    if(_mdp) _mdp.style.display='none';
+    var _mbtn=document.getElementById('btnMobileControls');
+    if(_mbtn){_mbtn.textContent='📱 Mobile Controls: OFF';_mbtn.style.background='';}
+  }
   curPage=page;
   if(page==='home'){setTimeout(()=>{try{initHomeDemo();}catch(e){}},50);setTimeout(()=>{try{showTrivia();}catch(e){}},100);}
   else if(page==='play'){renderPlayBoard();renderBotGrid();renderMyBots();renderEmojiGrid();}
@@ -12542,7 +12549,18 @@ function artPreview(){
         <button class="btn btn-primary" onclick="navTo('feedback')">&#128172; Send Feedback</button>
         <button class="btn btn-ghost" onclick="try{trackShareClick();navigator.share({title:'Chess64',url:'https://pytheorem07.github.io/Chess64.app/',text:'Free chess with AI bots, puzzles, and analysis'})}catch(e){navigator.clipboard.writeText('https://pytheorem07.github.io/Chess64.app/').then(()=>alert('Link copied!'))}">&#128279; Share Chess64</button>
       </div>
-    </div>
+    
+    <div class="card section" style="text-align:center;padding:28px;background:linear-gradient(135deg,rgba(59,130,246,.12),rgba(139,92,246,.08));border:1px solid rgba(59,130,246,.2)">
+      <div style="font-size:40px;margin-bottom:10px">♟</div>
+      <h2 style="margin:0 0 8px">Our Premium 3D Chess Experience</h2>
+      <p style="color:var(--text2);font-size:14px;line-height:1.7;max-width:500px;margin:0 auto 16px">
+        Experience chess in breathtaking 3D with our dedicated platform — engineered for the full chess experience with beautiful boards, pieces, and immersive gameplay.
+      </p>
+      <a href="https://pytheorem07.github.io/3dchess.app/" target="_blank" rel="noopener" class="btn btn-primary btn-lg" data-parental-link="3dchess.app" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px">
+        ♟ Visit 3dChess.app <span style="font-size:11px;opacity:.8">↗</span>
+      </a>
+      <div style="font-size:11px;color:var(--text2);margin-top:10px;opacity:.7">pytheorem07.github.io/3dchess.app</div>
+    </div></div>
   </div>
 
 </div>
@@ -17784,7 +17802,7 @@ function fbUploadPhotoFile(input){
 })();
 
 // ── PARENTAL CONTROLS ─────────────────────────────────────────────
-var _PARENTAL_PAGES = ['chat','forums','articles','players','events','music','tilted'];
+var _PARENTAL_PAGES = ['chat','forums','articles','players','events','music','tilted','feedback'];
 var _parentalState = null;
 
 function parentalLoad(){
@@ -17853,7 +17871,7 @@ function parentalShowSetup(){
     +(state.enabled?'<div style="margin-bottom:12px"><div style="font-weight:700;font-size:13px;margin-bottom:8px">Blocked Pages:</div>'
     +_PARENTAL_PAGES.map(function(page){
       var isBlocked=blocked[page]?true:false;
-      var labels={chat:'Messages/Chat',forums:'Forums',articles:'Articles',players:'Players',events:'Events',music:'Music Player',tilted:'Tilted? (Game)'};
+      var labels={chat:'Messages/Chat',forums:'Forums',articles:'Articles',players:'Players',events:'Events',music:'Music Player',feedback:'Feedback Page',tilted:'Tilted? (Game)'};
       return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">'
         +'<span style="font-size:13px">'+labels[page]+'</span>'
         +'<div style="width:36px;height:20px;border-radius:10px;background:'+(isBlocked?'var(--accent)':'#555')+';cursor:pointer;position:relative;transition:background .2s" '
@@ -20773,7 +20791,7 @@ body.mp-open{ padding-bottom:52px; }
         <span style="font-size:12px;color:rgba(255,255,255,.6)">&#127911; Current Playlist</span>
         <button class="mp-btn" style="font-size:11px;background:rgba(255,255,255,.08);border-radius:10px;padding:0 8px;width:auto;height:26px" onclick="mpClearPlaylist()">Clear</button>
       </div>
-      <div id="mp-playlist-list"></div>
+      <div id="mp-pl-tabs" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px"></div><div id="mp-playlist-list"></div>
     </div>
   </div>
 </div>
@@ -20788,7 +20806,9 @@ body.mp-open{ padding-bottom:52px; }
   var _queue=[];   // current search/playlist queue
   var _qIdx=0;
   var _liked=[];   // array of track objects
-  var _playlist=[];
+  var _playlist=[];  // legacy single playlist (kept for compat)
+  var _playlists={};  // named playlists: {name: [track,...]}
+  var _activePl='My Playlist';  // currently selected playlist name
   var _open=false;
   var _expanded=false;
   var _curTrack=null;
@@ -20798,9 +20818,30 @@ body.mp-open{ padding-bottom:52px; }
   // Load liked songs from localStorage
   try{ _liked=JSON.parse(localStorage.getItem('c64_music_liked')||'[]'); }catch(e){}
   try{ _playlist=JSON.parse(localStorage.getItem('c64_music_pl')||'[]'); }catch(e){}
+  try{ _playlists=JSON.parse(localStorage.getItem('c64_music_pls')||'{}'); if(!_playlists['My Playlist'])_playlists['My Playlist']=[]; }catch(e){_playlists={'My Playlist':[]};} 
 
   function saveLiked(){ try{localStorage.setItem('c64_music_liked',JSON.stringify(_liked));}catch(e){} }
-  function savePl(){ try{localStorage.setItem('c64_music_pl',JSON.stringify(_playlist));}catch(e){} }
+  function savePl(){ try{localStorage.setItem('c64_music_pl',JSON.stringify(_playlist));localStorage.setItem('c64_music_pls',JSON.stringify(_playlists));}catch(e){} }
+  function getActivePl(){ return _playlists[_activePl]||(_playlists[_activePl]=[],_playlists[_activePl]); }
+  window.mpCreatePlaylist=function(){
+    var name=prompt('Playlist name:');
+    if(!name||!name.trim()) return;
+    name=name.trim();
+    if(!_playlists[name]) _playlists[name]=[];
+    _activePl=name; savePl();
+    if(typeof showToast==='function') showToast('Playlist "'+name+'" created!');
+    mpRenderPlaylistTabs();
+  };
+  window.mpSwitchPlaylist=function(name){
+    _activePl=name; mpRenderPlaylist(); mpRenderPlaylistTabs();
+  };
+  function mpRenderPlaylistTabs(){
+    var el=document.getElementById('mp-pl-tabs');
+    if(!el) return;
+    el.innerHTML=Object.keys(_playlists).map(function(n){
+      return '<button onclick="window.mpSwitchPlaylist(this.getAttribute(\'data-n\'))" data-n="'+n.replace(/"/g,'&quot;')+'" style="padding:3px 9px;border-radius:5px;border:1px solid rgba(255,255,255,.15);background:'+(n===_activePl?'var(--accent)':'transparent')+';color:white;font-size:10px;cursor:pointer;white-space:nowrap">'+n+'</button>';
+    }).join('')+'<button onclick="mpCreatePlaylist()" style="padding:3px 9px;border-radius:5px;border:1px solid rgba(255,255,255,.25);background:transparent;color:rgba(255,255,255,.6);font-size:10px;cursor:pointer">+ New</button>';
+  }
 
   // Check if music is globally enabled
   function checkMusicEnabled(cb){
@@ -20921,6 +20962,7 @@ body.mp-open{ padding-bottom:52px; }
     return '<div class="mp-track'+(isPlaying?' playing':'')+'" id="mptrack-'+t.trackId+'">'
       +(art?'<img class="mp-track-art" src="'+art+'">'
            :'<div class="mp-track-art" style="display:flex;align-items:center;justify-content:center;font-size:16px">&#127925;</div>')
+      +'<button onclick="mpPlay('+i+',\''+src+'\')" style="background:'+(isPlaying?'rgba(252,60,68,.8)':'rgba(255,255,255,.15)')+';border:none;border-radius:50%;width:32px;height:32px;min-width:32px;cursor:pointer;color:white;font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0" title="Play">&#9654;</button>'
       +'<div class="mp-track-info" onclick="mpPlay('+i+',\''+src+'\')">'
       +'<div class="mp-track-name">'+esc(t.trackName)+'</div>'
       +'<div class="mp-track-artist">'+esc(t.artistName)+'</div>'
@@ -20953,7 +20995,7 @@ body.mp-open{ padding-bottom:52px; }
     _curTrack=list[idx];
     // If playing from search/liked, set _queue to that list
     if(src==='liked'){_queue=_liked;_qIdx=idx;}
-    else if(src==='pl'){_queue=_playlist;_qIdx=idx;}
+    else if(src==='pl'){_queue=getActivePl();_qIdx=idx;}
     else{_qIdx=idx;}
     _audio.src=_curTrack.previewUrl;
     _audio.play().catch(function(){});
@@ -21014,23 +21056,24 @@ body.mp-open{ padding-bottom:52px; }
     var track=_queue.find(function(t){return String(t.trackId)===String(id);})||
                _liked.find(function(t){return String(t.trackId)===String(id);});
     if(!track) return;
-    if(_playlist.some(function(t){return t.trackId===track.trackId;})){
-      if(typeof showToast==='function') showToast('Already in playlist'); return;
+    var pl=getActivePl();
+    if(pl.some(function(t){return t.trackId===track.trackId;})){
+      if(typeof showToast==='function') showToast('Already in "'+_activePl+'"'); return;
     }
-    _playlist.push(track);
+    pl.push(track);
     savePl();
     if(typeof showToast==='function') showToast('Added to playlist &#127911;');
     mpRenderTab(_tab);
   };
 
   window.mpRemoveFromPlaylist=function(id){
-    _playlist=_playlist.filter(function(t){return String(t.trackId)!==String(id);});
+    _playlists[_activePl]=(_playlists[_activePl]||[]).filter(function(t){return String(t.trackId)!==String(id);});_playlist=getActivePl();
     savePl(); mpRenderPlaylist();
   };
 
   window.mpClearPlaylist=function(){
-    if(!confirm('Clear playlist?')) return;
-    _playlist=[];savePl();mpRenderPlaylist();
+    if(!confirm('Clear "'+_activePl+'"?')) return;
+    _playlists[_activePl]=[];savePl();mpRenderPlaylist();
   };
 
   window.mpSeek=function(e){
@@ -24554,7 +24597,53 @@ function toggleOpeningFlash(){
         // Initialize display
         loadProgress();
         update(); // Start engine loop
-    </script>
+    
+        // Mobile controls toggle
+        window.marioToggleMobileControls = function() {
+            var dpad = document.getElementById('mario-dpad-overlay');
+            var btn = document.getElementById('btnMobileControls');
+            if (!dpad) {
+                // Create d-pad overlay
+                dpad = document.createElement('div');
+                dpad.id = 'mario-dpad-overlay';
+                dpad.style.cssText = 'position:fixed;bottom:20px;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-end;padding:0 16px;z-index:9999;pointer-events:none';
+                var leftBtn2=document.createElement('button'); leftBtn2.textContent='◀';
+                leftBtn2.style.cssText='width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.22);border:2px solid rgba(255,255,255,.4);color:white;font-size:22px;cursor:pointer';
+                ['pointerdown','touchstart'].forEach(function(ev){leftBtn2.addEventListener(ev,function(e){if(e.cancelable)e.preventDefault();window._marioKey('ArrowLeft',true);});});
+                ['pointerup','touchend'].forEach(function(ev){leftBtn2.addEventListener(ev,function(){window._marioKey('ArrowLeft',false);});});
+                var rightBtn2=document.createElement('button'); rightBtn2.textContent='▶';
+                rightBtn2.style.cssText='width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.22);border:2px solid rgba(255,255,255,.4);color:white;font-size:22px;cursor:pointer';
+                ['pointerdown','touchstart'].forEach(function(ev){rightBtn2.addEventListener(ev,function(e){if(e.cancelable)e.preventDefault();window._marioKey('ArrowRight',true);});});
+                ['pointerup','touchend'].forEach(function(ev){rightBtn2.addEventListener(ev,function(){window._marioKey('ArrowRight',false);});});
+                var jumpBtn2=document.createElement('button'); jumpBtn2.textContent='▲';
+                jumpBtn2.style.cssText='width:64px;height:64px;border-radius:50%;background:rgba(59,130,246,.35);border:2px solid rgba(59,130,246,.6);color:white;font-size:24px;cursor:pointer;pointer-events:auto';
+                ['pointerdown','touchstart'].forEach(function(ev){jumpBtn2.addEventListener(ev,function(e){if(e.cancelable)e.preventDefault();window._marioKey('ArrowUp',true);});});
+                ['pointerup','touchend'].forEach(function(ev){jumpBtn2.addEventListener(ev,function(){window._marioKey('ArrowUp',false);});});
+                var fireBtn2=document.createElement('button');
+                fireBtn2.textContent='🔥'; fireBtn2.title='Fire';
+                fireBtn2.style.cssText='width:56px;height:56px;border-radius:50%;background:rgba(239,68,68,.35);border:2px solid rgba(239,68,68,.6);color:white;font-size:22px;cursor:pointer;-webkit-tap-highlight-color:transparent';
+                ['pointerdown','touchstart'].forEach(function(ev){fireBtn2.addEventListener(ev,function(e){if(e.cancelable)e.preventDefault();window._marioKey('KeyF',true);});});
+                ['pointerup','touchend'].forEach(function(ev){fireBtn2.addEventListener(ev,function(){window._marioKey('KeyF',false);});});
+                var lrDiv2=document.createElement('div'); lrDiv2.style.cssText='pointer-events:auto;display:flex;gap:6px;align-items:center';
+                lrDiv2.appendChild(leftBtn2); lrDiv2.appendChild(rightBtn2);
+                var rg2=document.createElement('div'); rg2.style.cssText='pointer-events:auto;display:flex;gap:6px;align-items:center';
+                rg2.appendChild(jumpBtn2); rg2.appendChild(fireBtn2);
+                dpad.appendChild(lrDiv2); dpad.appendChild(rg2);
+                document.body.appendChild(dpad);
+                window._marioKey = function(key, down) {
+                    var ev = new KeyboardEvent(down?'keydown':'keyup',{code:key,key:key,bubbles:true});
+                    document.dispatchEvent(ev);
+                };
+                if(btn){ btn.textContent='📱 Mobile Controls: ON'; btn.style.background='rgba(59,130,246,.3)'; }
+            } else if (dpad.style.display === 'none') {
+                dpad.style.display = 'flex';
+                if(btn){ btn.textContent='📱 Mobile Controls: ON'; btn.style.background='rgba(59,130,246,.3)'; }
+            } else {
+                dpad.style.display = 'none';
+                if(btn){ btn.textContent='📱 Mobile Controls: OFF'; btn.style.background=''; }
+            }
+        };
+</script>
         </div>
         <script>
 
@@ -26100,7 +26189,7 @@ function localParentalShowToggles(){
   var container=document.getElementById('local-parental-toggles');
   if(!container) return;
   container.style.display='block';
-  var labels={chat:'Messages/Chat',forums:'Forums',articles:'Articles',players:'Players',events:'Events',music:'Music Player',tilted:'Tilted? (Game)'};
+  var labels={chat:'Messages/Chat',forums:'Forums',articles:'Articles',players:'Players',events:'Events',music:'Music Player',feedback:'Feedback Page',tilted:'Tilted? (Game)'};
   container.innerHTML='<div style="font-weight:600;font-size:13px;margin-bottom:8px">Block these pages on this device:</div>'
     +(typeof _PARENTAL_PAGES!=='undefined'?_PARENTAL_PAGES:[]).map(function(page){
       var isBlocked=blocked[page]?true:false;
@@ -26265,6 +26354,7 @@ function localParentalOpenPanel(){
   document.body.appendChild(panel);
   localParentalRefreshPanel();
 }
+window.localParentalOpenPanel=localParentalOpenPanel;
 
 function localParentalRefreshPanel(){
   var s=localParentalGetState();
@@ -26277,7 +26367,7 @@ function localParentalRefreshPanel(){
     :'<div style="background:rgba(250,204,21,.1);border:1px solid rgba(250,204,21,.4);border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:8px">Local controls are OFF on this device</div>';
   if(togglesEl&&s.enabled){
     var blocked=s.blocked||{};
-    var labels={chat:'Messages/Chat',forums:'Forums',articles:'Articles',players:'Players',events:'Events',music:'Music Player',tilted:'Tilted? (Game)'};
+    var labels={chat:'Messages/Chat',forums:'Forums',articles:'Articles',players:'Players',events:'Events',music:'Music Player',feedback:'Feedback Page',tilted:'Tilted? (Game)'};
     var pages=typeof _PARENTAL_PAGES!=='undefined'?_PARENTAL_PAGES:['chat','forums','articles','players','events','music','tilted'];
     togglesEl.innerHTML='<div style="font-weight:600;font-size:12px;margin-bottom:8px;color:var(--text2)">Block these pages on this device:</div>'
       +pages.map(function(page){
@@ -26553,26 +26643,43 @@ window.tiltedHideGame=function(){
         <span style="font-size:11px;color:var(--text2);margin-left:auto">← → Dodge · ↑/Space Jump · Double-jump!</span>
       </div>
       <!-- City Dash game settings -->
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
-        <label style="font-size:11px;color:var(--text2)">Jump:</label>
-        <select id="cr-dj-toggle" style="font-size:11px;padding:3px 6px;border-radius:6px;background:var(--bg3);color:var(--text1);border:1px solid rgba(255,255,255,.1)">
-          <option value="true">Double Jump</option><option value="false">Single Jump</option>
-        </select>
-        <label style="font-size:11px;color:var(--text2)">Obstacles:</label>
-        <select id="cr-hard-toggle" style="font-size:11px;padding:3px 6px;border-radius:6px;background:var(--bg3);color:var(--text1);border:1px solid rgba(255,255,255,.1)">
-          <option value="false">Normal</option><option value="true">⚠ Intense</option>
-        </select>
-        <label style="font-size:11px;color:var(--text2)">Scenery:</label>
-        <select id="cr-scenery-toggle" style="font-size:11px;padding:3px 6px;border-radius:6px;background:var(--bg3);color:var(--text1);border:1px solid rgba(255,255,255,.1)">
-          <option value="city">🌆 City (Default)</option>
-          <option value="sunset">🌅 Sunset City</option>
-          <option value="rainy">🌧 Rainy Night</option>
-          <option value="neon">💜 Neon District</option>
-        </select>
-        <label style="font-size:11px;color:var(--text2)">Controls:</label>
-        <select id="cr-keys-toggle" style="font-size:11px;padding:3px 6px;border-radius:6px;background:var(--bg3);color:var(--text1);border:1px solid rgba(255,255,255,.1)">
-          <option value="true">Show Buttons</option><option value="false">Hide Buttons</option>
-        </select>
+      <div style="background:var(--bg2);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <span style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.05em">Settings</span>
+        <div style="display:flex;align-items:center;gap:5px;background:var(--bg3);border-radius:7px;padding:4px 8px;border:1px solid rgba(255,255,255,.07)">
+          <span style="font-size:10px;color:var(--text2);font-weight:600">⬆ Jump</span>
+          <select id="cr-dj-toggle" style="font-size:11px;padding:2px 4px;border-radius:5px;background:transparent;color:var(--text1);border:none;outline:none;cursor:pointer">
+            <option value="true">Double</option><option value="false">Single</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;background:var(--bg3);border-radius:7px;padding:4px 8px;border:1px solid rgba(255,255,255,.07)">
+          <span style="font-size:10px;color:var(--text2);font-weight:600">🚧 Obstacles</span>
+          <select id="cr-hard-toggle" style="font-size:11px;padding:2px 4px;border-radius:5px;background:transparent;color:var(--text1);border:none;outline:none;cursor:pointer">
+            <option value="normal">Normal</option>
+            <option value="intense">Intense ⚠</option>
+            <option value="super">Super Intense 💀</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;background:var(--bg3);border-radius:7px;padding:4px 8px;border:1px solid rgba(255,255,255,.07)">
+          <span style="font-size:10px;color:var(--text2);font-weight:600">🏗 Bars</span>
+          <select id="cr-tracks-toggle" style="font-size:11px;padding:2px 4px;border-radius:5px;background:transparent;color:var(--text1);border:none;outline:none;cursor:pointer">
+            <option value="true">Visible</option><option value="false">Hidden</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;background:var(--bg3);border-radius:7px;padding:4px 8px;border:1px solid rgba(255,255,255,.07)">
+          <span style="font-size:10px;color:var(--text2);font-weight:600">🌆 Scenery</span>
+          <select id="cr-scenery-toggle" style="font-size:11px;padding:2px 4px;border-radius:5px;background:transparent;color:var(--text1);border:none;outline:none;cursor:pointer">
+            <option value="city">City</option>
+            <option value="sunset">Sunset</option>
+            <option value="rainy">Rainy Night</option>
+            <option value="neon">Neon District</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;background:var(--bg3);border-radius:7px;padding:4px 8px;border:1px solid rgba(255,255,255,.07)">
+          <span style="font-size:10px;color:var(--text2);font-weight:600">🎮 Buttons</span>
+          <select id="cr-keys-toggle" style="font-size:11px;padding:2px 4px;border-radius:5px;background:transparent;color:var(--text1);border:none;outline:none;cursor:pointer">
+            <option value="false">Hidden</option><option value="true">Visible</option>
+          </select>
+        </div>
       </div>
       <div id="cr-wrap" style="position:relative;width:100%;height:500px;background:#050a12;border-radius:12px;overflow:hidden">
         <div style="position:absolute;top:0;left:0;width:100%;padding:16px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;z-index:10;box-sizing:border-box">
@@ -26653,7 +26760,7 @@ const CR = {
   paused:false, doubleJumpEnabled:true, hardMode:false, scenery:'city',
   scene:null, camera:null, renderer:null, clock:null,
   player:null, obstacles:[], coins:[], powerups:[],
-  speed:0.22, score:0, hiScore:0, dist:0,
+  speed:0.22, score:0, hiScore:0, hiSpeed:0, dist:0,
   lane:1, targetLane:1, laneX:[-3,0,3],
   pY:0, pVY:0, onGround:true, doubleJumped:false,
   active:false, started:false, animId:null,
@@ -26678,12 +26785,16 @@ function init(){
   const wrap=el('cr-wrap');
   if(!wrap) return;
 
-  CR.hiScore=parseInt(localStorage.getItem('crHiV2')||0);
+  CR.hiScore=parseInt(localStorage.getItem('crHiV3')||0);
+  CR.hiSpeed=parseFloat(localStorage.getItem('crHiSpd')||0);
+  // Hide on-screen buttons by default
+  setTimeout(()=>{['cr-btn-left','cr-btn-right','cr-btn-jump'].forEach(id=>{const b=el(id);if(b)b.style.display='none';});const kt=el('cr-keys-toggle');if(kt)kt.value='false';},200);
   if(el('cr-hi')) el('cr-hi').textContent='BEST: '+CR.hiScore;
   if(el('cr-hi2')) el('cr-hi2').textContent='BEST: '+CR.hiScore;
 
   // Scene
   CR.scene=new THREE.Scene();
+  // Background and fog set by buildBuildings() based on CR.scenery
   CR.scene.background=new THREE.Color(0x050a12);
   CR.scene.fog=new THREE.Fog(0x050a12,30,90);
 
@@ -26751,6 +26862,16 @@ function buildRoad(){
 }
 
 function buildBuildings(){
+  // Apply scenery colors based on CR.scenery setting
+  const sceneryPalette={
+    city:{bld:[0x1a2a3a,0x0d1f2d,0x162030],win:0x88ccff,winOn:0xffee88,fog:0x050a12,road:0x1a1a1a},
+    sunset:{bld:[0x3a1a0a,0x2d0f08,0x4a2010],win:0xffcc88,winOn:0xff8844,fog:0x200a04,road:0x2a1a10},
+    rainy:{bld:[0x0a0a1a,0x050510,0x0d0d20],win:0x6699bb,winOn:0x88aacc,fog:0x050510,road:0x111118},
+    neon:{bld:[0x1a003a,0x0d001f,0x200040],win:0xff44ff,winOn:0x44ffff,fog:0x080012,road:0x0a0010}
+  };
+  const pal=sceneryPalette[CR.scenery]||sceneryPalette.city;
+  // Update scene bg and fog
+  if(CR.scene){CR.scene.background=new THREE.Color(pal.fog);CR.scene.fog=new THREE.Fog(pal.fog,30,90);}
   const RNG=(min,max,seed)=>{
     const x=Math.sin(seed*127.1+seed*311.7)*43758.5453;
     return min+(x-Math.floor(x))*(max-min);
@@ -26762,7 +26883,7 @@ function buildBuildings(){
     const w=RNG(3,8,i+100);
     const h=RNG(8,28,i+200);
     const d=RNG(4,10,i+300);
-    const col=[COLORS.bldA,COLORS.bldB,COLORS.bldC][i%3];
+    const col=pal.bld[i%3];
     const bld=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color:col}));
     bld.position.set(x,h/2,z); bld.castShadow=true; CR.scene.add(bld);
     // Windows
@@ -26771,7 +26892,7 @@ function buildBuildings(){
       for(let wc=0;wc<wCols;wc++){
         if(Math.random()<0.6){
           const wm=new THREE.Mesh(new THREE.PlaneGeometry(0.7,0.9),
-            new THREE.MeshBasicMaterial({color:Math.random()<0.4?COLORS.winOn:COLORS.window}));
+            new THREE.MeshBasicMaterial({color:Math.random()<0.4?pal.winOn:pal.win}));
           wm.position.set(x+(-w/2+wc*1.5+0.75),wr*2.5+2,z+d/2+0.01);
           CR.scene.add(wm);
         }
@@ -26890,6 +27011,7 @@ function loop(){
   CR.tracks.forEach(t=>{
     t.mesh.position.z+=spd*60*dt;
     if(t.mesh.position.z>15){ t.mesh.position.z-=160; }
+    t.mesh.visible=CR.showTracks;
   });
   // Buildings scroll
   CR.buildings.forEach(b=>{
@@ -26902,7 +27024,11 @@ function loop(){
   CR.coinTimer+=dt;
   CR.puTimer+=dt;
   const spawnInt=Math.max(0.7,1.8-CR.dist*0.00005);
-  if(CR.spawnTimer>spawnInt){CR.spawnTimer=0;spawnObstacle();if(CR.hardMode&&Math.random()<0.5)setTimeout(spawnObstacle,300);}
+  if(CR.spawnTimer>spawnInt){
+    CR.spawnTimer=0; spawnObstacle();
+    if(CR.hardMode==='super'){spawnObstacle();setTimeout(spawnObstacle,200);setTimeout(spawnObstacle,400);}
+    else if(CR.hardMode==='intense'&&Math.random()<0.6){setTimeout(spawnObstacle,300);}
+  }
   if(CR.coinTimer>1.8){CR.coinTimer=0;spawnCoin();}
   if(CR.puTimer>6){CR.puTimer=0;spawnPowerup();}
 
@@ -26963,7 +27089,7 @@ function loop(){
 
   // Score
   CR.dist+=spd*60*dt;
-  CR.score=Math.floor(CR.dist/8)+Math.floor(CR.score/5)*5;
+  CR.score=Math.floor(CR.dist/60)+Math.floor(CR.score/5)*5;
   updateHUD();
 
   // Camera slight bob
@@ -27031,10 +27157,13 @@ function activatePowerup(type){
 
 function gameOver(){
   CR.active=false;
-  if(CR.score>CR.hiScore){CR.hiScore=CR.score;localStorage.setItem('crHiV2',CR.hiScore);}
+  if(CR.score>CR.hiScore){CR.hiScore=CR.score;localStorage.setItem('crHiV3',CR.hiScore);}
+  var finalMult=Math.max(1,CR.speed/0.22);
+  if(finalMult>CR.hiSpeed){CR.hiSpeed=finalMult;localStorage.setItem('crHiSpd',finalMult.toFixed(1));}
   if(el('cr-hi')) el('cr-hi').textContent='BEST: '+CR.hiScore;
   if(el('cr-hi2')) el('cr-hi2').textContent='BEST: '+CR.hiScore;
-  if(el('cr-final-score')) el('cr-final-score').textContent='Score: '+CR.score;
+  var fMult=Math.max(1,CR.speed/0.22).toFixed(1);
+  if(el('cr-final-score')) el('cr-final-score').textContent='Score: '+CR.score+' · Peak Speed: '+fMult+'x';
   if(el('cr-overlay')){
     el('cr-overlay').style.display='flex';
     if(el('cr-title')) el('cr-title').textContent='GAME OVER';
@@ -27055,6 +27184,8 @@ function updateHUD(){
   if(el('cr-score')) el('cr-score').textContent='SCORE: '+CR.score;
   if(el('cr-hi')) el('cr-hi').textContent='BEST: '+CR.hiScore;
   if(el('cr-hi2')) el('cr-hi2').textContent='BEST: '+CR.hiScore;
+  var mult=Math.max(1.0,CR.speed/0.22);
+  if(el('cr-speed-mult')) el('cr-speed-mult').textContent=mult.toFixed(1)+'x';
 }
 
 // ── Input ─────────────────────────────────────────────────────────
@@ -27101,11 +27232,14 @@ function wireUI(){
     const show=e.target.value==='true';
     ['cr-btn-left','cr-btn-right','cr-btn-jump'].forEach(id=>{const b=el(id);if(b)b.style.display=show?'':'none';});
   });
+  el('cr-hard-toggle')&&(el('cr-hard-toggle').onchange=e=>{CR.hardMode=e.target.value;});
+  el('cr-tracks-toggle')&&(el('cr-tracks-toggle').onchange=e=>{CR.showTracks=e.target.value==='true';});
 }
 
 function rebuildScenery(){
-  // Remove old buildings
+  // Remove old buildings + windows
   CR.buildings.forEach(b=>CR.scene.remove(b)); CR.buildings=[];
+  // Remove old windows (they aren't tracked - remove all meshs from scene then rebuild)
   buildBuildings();
 }
 function onResize(){
@@ -27174,7 +27308,10 @@ window.cityDashInit=function(){
           <div id="c3d-best-val" style="font-family:monospace;font-size:16px;font-weight:700;color:#fff">–</div>
         </div>
       </div>
-      <div style="width:215px;flex-shrink:0;display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">
+        <button id="c3d-btn-hide-panel" class="btn btn-ghost btn-sm" style="writing-mode:vertical-rl;height:80px;padding:8px 4px">◀ Hide Panel</button>
+      </div>
+      <div id="c3d-sidebar" style="width:215px;flex-shrink:0;display:flex;flex-direction:column;gap:8px">
         <div style="display:flex;flex-wrap:wrap;gap:5px">
           <button id="c3d-btn-eval" class="btn btn-ghost btn-sm" style="flex:1">Hide Eval</button>
           <button id="c3d-btn-bm" class="btn btn-ghost btn-sm" style="flex:1">Hide Best</button>
@@ -27255,7 +27392,7 @@ window.cityDashInit=function(){
           <div style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Move List</div>
           <div id="c3d-move-list" style="line-height:1.8;word-break:break-all"><span style="color:rgba(255,255,255,.3);font-size:11px">No moves yet</span></div>
         </div>
-      </div>
+      </div><!-- /c3d-sidebar -->
     </div>
   </div>
 </div>
@@ -27731,6 +27868,7 @@ function update2D(){
 function setupInteraction(root){
   const el=Chess3D.renderer.domElement;
 
+  let _tapTime=0, _tapX=0, _tapY=0;
   const onDown=e=>{
     Chess3D.isDragging=true; Chess3D.dragMoved=false;
     if(e.touches&&e.touches.length===2){
@@ -27739,6 +27877,7 @@ function setupInteraction(root){
       const p=e.touches?e.touches[0]:e;
       Chess3D.startMouse={x:p.clientX,y:p.clientY};
       Chess3D.prevMouse={...Chess3D.startMouse};
+      _tapTime=Date.now(); _tapX=p.clientX; _tapY=p.clientY;
     }
     if(AudioCtx.ctx===null){try{AudioCtx.ctx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}}
   };
@@ -27751,37 +27890,43 @@ function setupInteraction(root){
       Chess3D.pinchDist=d; e.preventDefault(); return;
     }
     const p=e.touches?e.touches[0]:e;
-    const dx=p.clientX-Chess3D.prevMouse.x, dy=p.clientY-Chess3D.prevMouse.y;
-    if(Math.abs(p.clientX-Chess3D.startMouse.x)>6||Math.abs(p.clientY-Chess3D.startMouse.y)>6) Chess3D.dragMoved=true;
-    Chess3D.tTheta-=dx*0.007;
-    Chess3D.tPhi=Math.max(0.08,Math.min(Math.PI/2-0.05,Chess3D.tPhi+dy*0.007));
+    const dx=p.clientX-Chess3D.startMouse.x, dy=p.clientY-Chess3D.startMouse.y;
+    // Higher threshold for touch (12px) vs mouse (4px) to avoid false drags on mobile
+    const threshold=e.touches?18:5;
+    if(Math.abs(dx)>threshold||Math.abs(dy)>threshold) Chess3D.dragMoved=true;
+    Chess3D.tTheta-=(p.clientX-Chess3D.prevMouse.x)*0.007;
+    Chess3D.tPhi=Math.max(0.08,Math.min(Math.PI/2-0.05,Chess3D.tPhi+(p.clientY-Chess3D.prevMouse.y)*0.007));
     Chess3D.prevMouse={x:p.clientX,y:p.clientY};
   };
 
   const onUp=e=>{
-    if(Chess3D.isDragging&&!Chess3D.dragMoved){
-      const p=e.changedTouches?e.changedTouches[0]:e;
+    const isTouch=!!e.changedTouches;
+    const pt=e.changedTouches?e.changedTouches[0]:e; // renamed to pt to avoid shadowing
+    // Tap = no significant movement AND short duration
+    const tapDist=Math.hypot(pt.clientX-_tapX,pt.clientY-_tapY);
+    const tapDur=Date.now()-_tapTime;
+    // More lenient tap threshold for touch: 20px, 600ms
+    const isTap=!Chess3D.dragMoved&&(!isTouch||(tapDist<20&&tapDur<600));
+    if(Chess3D.isDragging&&isTap){
       const rc=Chess3D.renderer.domElement.getBoundingClientRect();
-      Chess3D.mouse.x=((p.clientX-rc.left)/rc.width)*2-1;
-      Chess3D.mouse.y=-((p.clientY-rc.top)/rc.height)*2+1;
+      Chess3D.mouse.x=((pt.clientX-rc.left)/rc.width)*2-1;
+      Chess3D.mouse.y=-((pt.clientY-rc.top)/rc.height)*2+1;
       Chess3D.raycaster.setFromCamera(Chess3D.mouse,Chess3D.camera);
-      // Intersect both board squares AND piece meshes (recursive)
+      // Intersect board squares AND all piece mesh children (no variable shadowing)
       const allObjs=[...Chess3D.boardGroup.children];
-      Object.values(Chess3D.pieces).forEach(p=>{if(p.mesh)allObjs.push(...p.mesh.children)});
+      Object.values(Chess3D.pieces).forEach(piece=>{
+        if(piece.mesh) piece.mesh.children.forEach(ch=>allObjs.push(ch));
+      });
       const hits=Chess3D.raycaster.intersectObjects(allObjs,true);
-      if(hits.length){
-        // Find which square was hit or which piece's square
-        let hitSq=null;
-        for(const h of hits){
-          if(h.object.userData&&h.object.userData.sq){hitSq=h.object.userData.sq;break;}
-          // Check if hit object is part of a piece - find its square
-          for(const [sq,p] of Object.entries(Chess3D.pieces)){
-            if(p.mesh&&(p.mesh===h.object||p.mesh.children.includes(h.object))){hitSq=sq;break;}
-          }
-          if(hitSq) break;
+      let hitSq=null;
+      for(const h of hits){
+        if(h.object.userData&&h.object.userData.sq){hitSq=h.object.userData.sq;break;}
+        for(const [sq,piece] of Object.entries(Chess3D.pieces)){
+          if(piece.mesh&&(piece.mesh===h.object||piece.mesh.children.includes(h.object))){hitSq=sq;break;}
         }
-        if(hitSq) handleSqClick(hitSq);
+        if(hitSq) break;
       }
+      if(hitSq) handleSqClick(hitSq);
     }
     if(!e.touches||e.touches.length===0){Chess3D.isDragging=false;Chess3D.dragMoved=false;}
   };
@@ -27790,7 +27935,9 @@ function setupInteraction(root){
   window.addEventListener('mousemove',onMove);
   window.addEventListener('mouseup',onUp);
   el.addEventListener('touchstart',onDown,{passive:false});
+  el.addEventListener('touchmove',onMove,{passive:false});
   window.addEventListener('touchmove',onMove,{passive:false});
+  el.addEventListener('touchend',onUp,{passive:false});
   window.addEventListener('touchend',onUp);
   el.addEventListener('wheel',e=>{Chess3D.radius=Math.max(5,Math.min(28,Chess3D.radius+e.deltaY*0.012));e.preventDefault();},{passive:false});
 
@@ -28083,9 +28230,21 @@ function wireUI(){
 
   // Flip
   const flipBtn=get('c3d-btn-flip');
-  if(flipBtn) flipBtn.onclick=()=>{Chess3D.tTheta+=Math.PI;};
+  if(flipBtn) flipBtn.onclick=()=>{
+    Chess3D.tTheta+=Math.PI;
+    // Also flip 2D board
+    const b2=document.getElementById('c3d-board2d');
+    if(b2){b2.style.transform=b2.style.transform==='rotate(180deg)'?'':'rotate(180deg)';}
+  };
 
   // Copy PGN
+  const hidePanel=get('c3d-btn-hide-panel');
+  const sidebar=get('c3d-sidebar');
+  if(hidePanel&&sidebar) hidePanel.onclick=()=>{
+    const hidden=sidebar.style.display==='none';
+    sidebar.style.display=hidden?'':'none';
+    hidePanel.textContent=hidden?'◀ Hide Panel':'▶ Show Panel';
+  };
   const pgnBtn=get('c3d-btn-pgn');
   if(pgnBtn) pgnBtn.onclick=()=>{
     const ta=document.createElement('textarea');
@@ -28150,7 +28309,7 @@ function cityDashShow(){
   var panel=document.getElementById('city-dash-panel');
   if(main) main.style.display='none';
   if(game) game.style.display='none';
-  if(panel) panel.style.display='block';
+  if(panel){ panel.style.display='block'; setTimeout(function(){panel.scrollIntoView({behavior:'smooth',block:'start'});window.scrollTo(0,panel.getBoundingClientRect().top+window.scrollY-60);},80); setTimeout(function(){panel.scrollIntoView({behavior:'smooth',block:'start'});window.scrollTo(0,panel.offsetTop-60);},50); }
   setTimeout(function(){
     if(typeof window.cityDashInit==='function') window.cityDashInit();
     window.dispatchEvent(new Event('resize'));
