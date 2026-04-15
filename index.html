@@ -26638,7 +26638,65 @@ window.tiltedHideGame=function(){
       <div style="display:flex;gap:8px;padding:10px 0;align-items:center;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="cityDashHide()">← Back to Tilted?</button>
         <button class="btn btn-ghost btn-sm" onclick="navTo('home')">← Chess64 Home</button>
-        <span style="font-size:11px;color:var(--text2);margin-left:auto">← → Dodge · ↑/Space Jump · Double-jump!</span>
+        <span style="font-size:11px;color:var(--text2)">← → Dodge · ↑/Space Jump · Double-jump!</span>
+        <button class="btn btn-ghost btn-sm" onclick="crManualShow()" style="margin-left:auto">📖 Manual</button>
+      </div>
+      <!-- Manual overlay -->
+      <div id="cr-manual" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;overflow-y:auto;padding:24px;box-sizing:border-box">
+        <div style="max-width:680px;margin:0 auto;background:#0f172a;border-radius:16px;padding:28px;border:1px solid rgba(255,255,255,.1)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+            <h2 style="margin:0;font-size:22px;background:linear-gradient(135deg,#00d4ff,#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent">📖 City Dash Manual</h2>
+            <button onclick="crManualHide()" style="background:transparent;border:1px solid rgba(255,255,255,.2);color:white;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:14px">✕ Close</button>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:13px;line-height:1.7;color:#cbd5e1">
+            <div>
+              <h3 style="color:#00d4ff;margin:0 0 8px;font-size:14px">🎮 Controls</h3>
+              <p style="margin:0 0 6px"><strong style="color:white">← → Arrow / A D</strong> — Dodge between lanes</p>
+              <p style="margin:0 0 6px"><strong style="color:white">↑ / Space / W</strong> — Jump</p>
+              <p style="margin:0 0 6px"><strong style="color:white">Double-tap Jump</strong> — Double jump (if enabled)</p>
+              <p style="margin:0 0 6px"><strong style="color:white">On-screen buttons</strong> — ◀ ▲ ▶ (toggle in settings)</p>
+              <h3 style="color:#00d4ff;margin:14px 0 8px;font-size:14px">🏆 Scoring</h3>
+              <p style="margin:0 0 6px"><strong style="color:white">Distance</strong> — Score increases as you run further</p>
+              <p style="margin:0 0 6px"><strong style="color:white">Gold coins ●</strong> — +5 points each. Magnet pulls them in!</p>
+              <p style="margin:0 0 6px"><strong style="color:white">Speed multiplier</strong> — Shown as 1.0x, 1.5x, 2.0x etc next to score</p>
+              <p style="margin:0 0 6px"><strong style="color:white">Hi Score &amp; Hi Speed</strong> — Saved locally across sessions</p>
+            </div>
+            <div>
+              <h3 style="color:#f97316;margin:0 0 8px;font-size:14px">⚡ Power-Ups</h3>
+              <p style="margin:0 0 6px"><strong style="color:#38bdf8">🛡 Shield</strong> — Absorbs one obstacle hit (5 sec)</p>
+              <p style="margin:0 0 6px"><strong style="color:#f472b6">🧲 Magnet</strong> — Attracts coins from a distance (7 sec)</p>
+              <p style="margin:0 0 6px"><strong style="color:#f97316">⚡ Boost</strong> — 1.7× speed burst (5 sec)</p>
+              <h3 style="color:#f97316;margin:14px 0 8px;font-size:14px">🚧 Obstacles</h3>
+              <p style="margin:0 0 4px">Hit an obstacle and it's game over (unless shielded).</p>
+              <p style="margin:0 0 4px"><strong style="color:white">City:</strong> Buses, Barriers, Crates</p>
+              <p style="margin:0 0 4px"><strong style="color:white">Neon:</strong> Pillars, Walls, Plasma Balls</p>
+              <p style="margin:0 0 4px"><strong style="color:white">Space:</strong> Asteroids, Cubes, Rings</p>
+              <p style="margin:0 0 4px"><strong style="color:white">Retro:</strong> Barrels, Fences, Spikes</p>
+            </div>
+            <div>
+              <h3 style="color:#22c55e;margin:0 0 8px;font-size:14px">⚙ Settings</h3>
+              <p style="margin:0 0 6px"><strong style="color:white">Jump Mode</strong> — Single or Double jump</p>
+              <p style="margin:0 0 6px"><strong style="color:white">Obstacles</strong> — Normal / Intense (2× spawns) / Super Intense 💀 (3×)</p>
+              <p style="margin:0 0 6px"><strong style="color:white">Scenery</strong> — City / Sunset / Rainy Night / Neon District</p>
+              <p style="margin:0 0 6px"><strong style="color:white">🏗 Bars</strong> — Toggle the overhead track arches</p>
+              <p style="margin:0 0 6px"><strong style="color:white">🌉 Zones</strong> — Enables tunnels &amp; bridges every ~400m</p>
+              <p style="margin:0 0 6px"><strong style="color:white">🌫 Fog</strong> — Dense fog in tunnels (harder!)</p>
+              <p style="margin:0 0 6px"><strong style="color:white">🎮 Buttons</strong> — Show/hide on-screen D-pad</p>
+            </div>
+            <div>
+              <h3 style="color:#22c55e;margin:0 0 8px;font-size:14px">🌆 Zones (when enabled)</h3>
+              <p style="margin:0 0 6px">Every 400m the environment changes. Pattern repeats:</p>
+              <p style="margin:0 0 4px">🏙 <strong style="color:white">City (0-400m)</strong> — Normal streets</p>
+              <p style="margin:0 0 4px">🏙 <strong style="color:white">City (400-800m)</strong> — New buildings</p>
+              <p style="margin:0 0 4px">🚇 <strong style="color:white">Tunnel (800-1200m)</strong> — Dark arches, neon lighting. Fog toggle makes this harder.</p>
+              <p style="margin:0 0 4px">🌉 <strong style="color:white">Bridge (1200-1600m)</strong> — Open sky, cable-stayed bridge, water below</p>
+              <p style="margin:4px 0 0;color:#64748b;font-size:11px">Then repeats. Zones only active when 🌉 Zones is set to On.</p>
+            </div>
+          </div>
+          <div style="margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08);text-align:center;color:#475569;font-size:12px">
+            Tip: Play in landscape on mobile for best experience. Speed increases the longer you survive!
+          </div>
+        </div>
       </div>
       <!-- City Dash game settings -->
       <div style="background:var(--bg2);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;gap:12px;flex-wrap:wrap;align-items:center">
@@ -26675,6 +26733,15 @@ window.tiltedHideGame=function(){
             <option value="false">Off</option><option value="true">On (harder!)</option>
           </select>
         </div>
+        <div style="display:flex;align-items:center;gap:5px;background:var(--bg3);border-radius:7px;padding:4px 8px;border:1px solid rgba(255,255,255,.07)" title="Choose the visual style of obstacles">
+          <span style="font-size:10px;color:var(--text2);font-weight:600">🚧 Obstacle Style</span>
+          <select id="cr-obs-style" style="font-size:11px;padding:2px 4px;border-radius:5px;background:transparent;color:var(--text1);border:none;outline:none;cursor:pointer">
+            <option value="city">🏙 City (buses/crates)</option>
+            <option value="neon">💜 Neon (pillars/plasma)</option>
+            <option value="space">🚀 Space (asteroids)</option>
+            <option value="retro">🪵 Retro (barrels/fences)</option>
+          </select>
+        </div>
         <div style="display:flex;align-items:center;gap:5px;background:var(--bg3);border-radius:7px;padding:4px 8px;border:1px solid rgba(255,255,255,.07)">
           <span style="font-size:10px;color:var(--text2);font-weight:600">🌆 Scenery</span>
           <select id="cr-scenery-toggle" style="font-size:11px;padding:2px 4px;border-radius:5px;background:transparent;color:var(--text1);border:none;outline:none;cursor:pointer">
@@ -26693,12 +26760,25 @@ window.tiltedHideGame=function(){
         <div style="display:flex;align-items:center;gap:5px;background:var(--bg3);border-radius:7px;padding:4px 8px;border:1px solid rgba(255,255,255,.07)">
           <span style="font-size:10px;color:var(--text2);font-weight:600">👤 Character</span>
           <select id="cr-char-toggle" style="font-size:11px;padding:2px 4px;border-radius:5px;background:transparent;color:var(--text1);border:none;outline:none;cursor:pointer">
-            <option value="runner">🏃 Runner</option>
-            <option value="racer">🏎 Racer</option>
-            <option value="knight">♞ Knight</option>
-            <option value="ghost">👻 Ghost</option>
-            <option value="robot">🤖 Robot</option>
-            <option value="pawn">♟ Pawn</option>
+            <optgroup label="3D Runners">
+              <option value="cyan" selected>Cyan Runner</option>
+              <option value="orange">Orange Runner</option>
+              <option value="purple">Purple Runner</option>
+              <option value="green">Green Runner</option>
+              <option value="red">Red Runner</option>
+              <option value="gold">Gold Runner</option>
+              <option value="white">White Runner</option>
+            </optgroup>
+            <optgroup label="Emoji / Favicon">
+              <option value="emoji-pawn">♟ Pawn</option>
+              <option value="emoji-knight">♞ Knight</option>
+              <option value="emoji-star">⭐ Star</option>
+              <option value="emoji-fire">🔥 Fire</option>
+              <option value="emoji-ghost">👻 Ghost</option>
+              <option value="emoji-robot">🤖 Robot</option>
+              <option value="emoji-crown">👑 Crown</option>
+              <option value="emoji-bolt">⚡ Bolt</option>
+            </optgroup>
           </select>
         </div>
       </div>
@@ -26779,7 +26859,7 @@ window.tiltedHideGame=function(){
 
 const CR = {
   paused:false, doubleJumpEnabled:true, hardMode:'normal', scenery:'city',
-  showTracks:true, character:'runner', fogZones:false, zoneSwitch:false,
+  showTracks:true, character:'cyan', fogZones:false, zoneSwitch:false,
   scene:null, camera:null, renderer:null, clock:null,
   player:null, obstacles:[], coins:[], powerups:[],
   speed:0.22, score:0, hiScore:0, hiSpeed:0, dist:0,
@@ -26942,32 +27022,73 @@ function spawnTrack(zPos){
 }
 
 
-// ── Characters ──────────────────────────────────────────────────────
+// ── Characters — each renders as a floating emoji billboard ─────────
+// Characters: type 'capsule' = 3D body, type 'emoji' = billboard
 const CHARACTERS={
-  runner:{label:'🏃 Runner',color:0x00d4ff,emissive:0x00d4ff,scale:1.0},
-  racer:{label:'🏎 Racer',color:0xf97316,emissive:0xf97316,scale:0.9},
-  knight:{label:'♞ Knight',color:0xd4af37,emissive:0xffd700,scale:1.1},
-  ghost:{label:'👻 Ghost',color:0x8b5cf6,emissive:0x7c3aed,scale:1.0},
-  robot:{label:'🤖 Robot',color:0x64748b,emissive:0x38bdf8,scale:1.05},
-  pawn:{label:'♟ Pawn',color:0xeeeeee,emissive:0xaaaaaa,scale:1.0}
+  // Default 3D capsule characters (color variants)
+  cyan:   {label:'Cyan Runner',   type:'capsule', color:0x00d4ff, emissive:0x0088aa},
+  orange: {label:'Orange Runner', type:'capsule', color:0xf97316, emissive:0x993300},
+  purple: {label:'Purple Runner', type:'capsule', color:0x8b5cf6, emissive:0x4a2080},
+  green:  {label:'Green Runner',  type:'capsule', color:0x22c55e, emissive:0x0a5530},
+  red:    {label:'Red Runner',    type:'capsule', color:0xef4444, emissive:0x991111},
+  gold:   {label:'Gold Runner',   type:'capsule', color:0xfbbf24, emissive:0x885500},
+  white:  {label:'White Runner',  type:'capsule', color:0xffffff, emissive:0x888888},
+  // Emoji billboard characters (favicons/icons)
+  'emoji-pawn':  {label:'♟ Pawn',   type:'emoji', emoji:'♟',  color:0xffffff},
+  'emoji-knight':{label:'♞ Knight', type:'emoji', emoji:'♞',  color:0xd4af37},
+  'emoji-star':  {label:'⭐ Star',   type:'emoji', emoji:'⭐', color:0xfbbf24},
+  'emoji-fire':  {label:'🔥 Fire',   type:'emoji', emoji:'🔥', color:0xef4444},
+  'emoji-ghost': {label:'👻 Ghost',  type:'emoji', emoji:'👻', color:0x8b5cf6},
+  'emoji-robot': {label:'🤖 Robot',  type:'emoji', emoji:'🤖', color:0x38bdf8},
+  'emoji-crown': {label:'👑 Crown',  type:'emoji', emoji:'👑', color:0xfbbf24},
+  'emoji-bolt':  {label:'⚡ Bolt',   type:'emoji', emoji:'⚡', color:0xfde68a},
 };
+
+function makeEmojiTexture(emoji){
+  var cv=document.createElement('canvas'); cv.width=192; cv.height=192;
+  var cx=cv.getContext('2d');
+  cx.clearRect(0,0,192,192);
+  cx.font='140px serif';
+  cx.textAlign='center'; cx.textBaseline='middle';
+  cx.fillText(emoji,96,104);
+  return new THREE.CanvasTexture(cv);
+}
 function buildPlayer(){
+  if(CR.player){CR.scene.remove(CR.player);CR.player=null;CR.playerBillboard=null;}
   const g=new THREE.Group();
-  const charDef=CHARACTERS[CR.character]||CHARACTERS.runner;
-  const mat=new THREE.MeshPhongMaterial({color:charDef.color,emissive:charDef.emissive,emissiveIntensity:0.5});
-  g.scale.setScalar(charDef.scale);
-  // Body (capsule approximation)
-  const body=new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.45,1.1,12),mat);
-  const head=new THREE.Mesh(new THREE.SphereGeometry(0.45,12,12),mat);
-  head.position.y=0.85;
-  const bot=new THREE.Mesh(new THREE.SphereGeometry(0.45,12,12),mat);
-  bot.position.y=-0.85;
-  // Trail light
-  const trail=new THREE.PointLight(charDef.color,2.5,8);
-  trail.position.set(0,0,1);
-  g.add(body,head,bot,trail);
+  const charDef=CHARACTERS[CR.character]||CHARACTERS.cyan;
+  const trail=new THREE.PointLight(charDef.color,2.8,12);
+  trail.position.set(0,0.8,0.8);
+  g.add(trail);
+  if(charDef.type==='emoji'){
+    // ── Emoji billboard character ──
+    const tex=makeEmojiTexture(charDef.emoji);
+    const bill=new THREE.Mesh(
+      new THREE.PlaneGeometry(2.6,2.6),
+      new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false,side:THREE.DoubleSide})
+    );
+    bill.position.y=1.1;
+    g.add(bill);
+    CR.playerBillboard=bill;
+    // invisible shadow caster
+    const sh=new THREE.Mesh(new THREE.BoxGeometry(1.2,2.0,0.4),new THREE.MeshBasicMaterial({visible:false}));
+    sh.castShadow=true; sh.position.y=1.0; g.add(sh);
+  } else {
+    // ── Default 3D capsule character ──
+    const mat=new THREE.MeshPhongMaterial({color:charDef.color,emissive:charDef.emissive,emissiveIntensity:0.5,shininess:80});
+    const body=new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.42,1.0,16),mat);
+    body.position.y=0.0; body.castShadow=true; g.add(body);
+    const head=new THREE.Mesh(new THREE.SphereGeometry(0.44,16,16),mat);
+    head.position.y=0.78; head.castShadow=true; g.add(head);
+    const bot=new THREE.Mesh(new THREE.SphereGeometry(0.44,16,16),mat);
+    bot.position.y=-0.78; bot.castShadow=true; g.add(bot);
+    // Visor
+    const visorMat=new THREE.MeshPhongMaterial({color:0x000000,emissive:charDef.color,emissiveIntensity:0.8,shininess:200});
+    const visor=new THREE.Mesh(new THREE.SphereGeometry(0.22,12,8,0,Math.PI*2,0,Math.PI*0.5),visorMat);
+    visor.position.set(0.12,0.85,0.3); visor.rotation.x=0.4; g.add(visor);
+    CR.playerBillboard=null;
+  }
   g.position.set(LANES[CR.lane],1.3,0);
-  g.castShadow=true;
   CR.scene.add(g);
   CR.player=g;
 }
@@ -27053,6 +27174,26 @@ function loop(){
     if(b.position.z>30) b.position.z-=500;
   });
 
+  // Move zone decor
+  if(CR.zoneDecor){
+    for(var zi=CR.zoneDecor.length-1;zi>=0;zi--){
+      CR.zoneDecor[zi].mesh.position.z+=spd*60*dt;
+      if(CR.zoneDecor[zi].mesh.position.z>20){
+        CR.scene.remove(CR.zoneDecor[zi].mesh);
+        CR.zoneDecor.splice(zi,1);
+      }
+    }
+  }
+
+  // Spawn zone decor periodically (tunnel/bridge zones only)
+  if(CR.zoneSwitch){
+    if(CR.decorTimer===undefined)CR.decorTimer=0;
+    CR.decorTimer+=dt;
+    var zoneType=(Math.floor(CR.dist/400))%4;
+    var decorInterval=(zoneType===2||zoneType===3)?1.5:9999;
+    if(CR.decorTimer>decorInterval){CR.decorTimer=0;spawnZoneDecor();}
+  }
+
   // Spawn
   CR.spawnTimer+=dt;
   CR.coinTimer+=dt;
@@ -27123,8 +27264,8 @@ function loop(){
 
   // Score
   CR.dist+=spd*60*dt;
-  // Environment zones (only when enabled)
-  var zone=CR.zoneSwitch ? Math.floor(CR.dist/400) : 0;
+  // Environment zones
+  var zone=Math.floor(CR.dist/400);
   CR.currentZone=zone;
   if(CR.scene){
     var inTunnel=CR.fogZones&&CR.zoneSwitch&&(zone%4===2);
@@ -27146,6 +27287,10 @@ function loop(){
 
   // Camera slight bob
   CR.camera.position.y=4.5+Math.sin(CR.ticks*0.09)*0.07;
+  // Billboard always faces camera (emoji chars only)
+  if(CR.playerBillboard&&CR.camera){
+    CR.playerBillboard.quaternion.copy(CR.camera.quaternion);
+  }
 
   // Shield glow
   const shieldRing=el('cr-shield-ring');
@@ -27168,44 +27313,114 @@ function renderIdle(){
 }
 
 function spawnZoneDecor(){
-  // Spawn tunnel arch or bridge element based on current zone
-  var zone=CR.currentZone||0;
-  if(zone%4===2){
-    // Tunnel: dark arches with neon strips
+  if(!CR.zoneSwitch) return;  // zones off
+  // Compute zone directly from distance (don't rely on CR.currentZone)
+  var zone=Math.floor(CR.dist/400);
+  var zType=zone%4;
+  CR.zoneDecor=CR.zoneDecor||[];
+  if(zType===2){
+    // === TUNNEL: dark arches with neon lights ===
+    var archMat=new THREE.MeshLambertMaterial({color:0x080808});
     var arch=new THREE.Group();
-    var archMat=new THREE.MeshLambertMaterial({color:0x0a0a0a});
-    var top=new THREE.Mesh(new THREE.BoxGeometry(10,1.5,0.8),archMat); top.position.y=8.5; arch.add(top);
-    var sL=new THREE.Mesh(new THREE.BoxGeometry(0.8,8,0.8),archMat); sL.position.set(-5,4,0); arch.add(sL);
-    var sR=new THREE.Mesh(new THREE.BoxGeometry(0.8,8,0.8),archMat); sR.position.set(5,4,0); arch.add(sR);
-    var strip=new THREE.Mesh(new THREE.BoxGeometry(9,0.15,0.15),new THREE.MeshBasicMaterial({color:0xff44aa}));
-    strip.position.y=9; arch.add(strip);
-    arch.position.z=-55;
+    // Tunnel walls
+    var top=new THREE.Mesh(new THREE.BoxGeometry(11,2,1.2),archMat);
+    top.position.y=8.5; arch.add(top);
+    var sL=new THREE.Mesh(new THREE.BoxGeometry(1.0,8,1.2),archMat);
+    sL.position.set(-5.5,4,0); arch.add(sL);
+    var sR=new THREE.Mesh(new THREE.BoxGeometry(1.0,8,1.2),archMat);
+    sR.position.set(5.5,4,0); arch.add(sR);
+    // Neon ceiling strip (alternating colors)
+    var neonCol=[0xff44aa,0x00f3ff,0xff8800][zone%3];
+    var ceil=new THREE.Mesh(new THREE.BoxGeometry(9.5,0.18,1.2),
+      new THREE.MeshBasicMaterial({color:neonCol}));
+    ceil.position.y=9.35; arch.add(ceil);
+    // Add small light dots on sides
+    for(var li=0;li<3;li++){
+      var dot=new THREE.Mesh(new THREE.SphereGeometry(0.12,6,6),
+        new THREE.MeshBasicMaterial({color:neonCol}));
+      dot.position.set(-4.9,li*2.5+1.5,0.5); arch.add(dot);
+      var dot2=dot.clone(); dot2.position.x=4.9; arch.add(dot2);
+    }
+    arch.position.z=-52;
     CR.scene.add(arch);
-    CR.zoneDecor=CR.zoneDecor||[];
-    CR.zoneDecor.push({mesh:arch});
-  } else if(zone%4===3){
-    // Bridge: railings
-    [-4.5,4.5].forEach(function(x){
-      var rail=new THREE.Mesh(new THREE.BoxGeometry(0.3,1.8,40),new THREE.MeshLambertMaterial({color:0x4a5568}));
-      rail.position.set(x,0.9,-40);
+    CR.zoneDecor.push({mesh:arch,z:-52});
+  } else if(zType===3){
+    // === BRIDGE: cable-stayed bridge structure ===
+    var bMat=new THREE.MeshLambertMaterial({color:0x374151});
+    var cMat=new THREE.MeshLambertMaterial({color:0x64748b});
+    // Side railings
+    [-4.7,4.7].forEach(function(x){
+      var rail=new THREE.Mesh(new THREE.BoxGeometry(0.25,1.6,60),bMat);
+      rail.position.set(x,0.8,-35);
       CR.scene.add(rail);
-      CR.zoneDecor=CR.zoneDecor||[];
-      CR.zoneDecor.push({mesh:rail});
+      CR.zoneDecor.push({mesh:rail,z:-35});
+      // Railing posts
+      for(var pi=0;pi<6;pi++){
+        var post=new THREE.Mesh(new THREE.BoxGeometry(0.25,2.5,0.25),cMat);
+        post.position.set(x,1.25,-5-pi*9);
+        CR.scene.add(post);
+        CR.zoneDecor.push({mesh:post,z:-5-pi*9});
+      }
     });
+    // Bridge cables (diagonal lines from tower)
+    var towerMat=new THREE.MeshLambertMaterial({color:0x9ca3af});
+    var tower=new THREE.Mesh(new THREE.BoxGeometry(0.4,12,0.4),towerMat);
+    tower.position.set(0,6,-25);
+    CR.scene.add(tower);
+    CR.zoneDecor.push({mesh:tower,z:-25});
+    // Teal ground strip (water effect below)
+    var water=new THREE.Mesh(new THREE.BoxGeometry(12,0.1,60),
+      new THREE.MeshLambertMaterial({color:0x0369a1}));
+    water.position.set(0,-0.3,-35);
+    CR.scene.add(water);
+    CR.zoneDecor.push({mesh:water,z:-35});
   }
 }
+// Obstacle style sets
+const OBS_SETS={
+  city:{
+    types:['bus','barrier','crate'],
+    bus:  {w:2.0,h:2.2,d:4.5,col:0xef4444,shape:'box',label:'Bus'},
+    barrier:{w:1.2,h:1.8,d:0.6,col:0xf59e0b,shape:'box',label:'Barrier'},
+    crate:{w:1.4,h:1.4,d:1.4,col:0x374151,shape:'box',label:'Crate'},
+  },
+  neon:{
+    types:['pillar','wall','ball'],
+    pillar:{w:0.8,h:3.0,d:0.8,col:0x00f3ff,shape:'box',label:'Neon Pillar'},
+    wall:  {w:3.0,h:2.5,d:0.4,col:0xff00ff,shape:'box',label:'Neon Wall'},
+    ball:  {w:1.6,h:1.6,d:1.6,col:0xfbbf24,shape:'sphere',label:'Plasma Ball'},
+  },
+  space:{
+    types:['asteroid','cube','ring'],
+    asteroid:{w:1.8,h:1.8,d:1.8,col:0x6b7280,shape:'sphere',label:'Asteroid'},
+    cube:    {w:1.5,h:1.5,d:1.5,col:0x8b5cf6,shape:'box',label:'Space Cube'},
+    ring:    {w:2.5,h:0.5,d:2.5,col:0x38bdf8,shape:'box',label:'Ring'},
+  },
+  retro:{
+    types:['barrel','fence','spike'],
+    barrel:{w:1.2,h:1.8,d:1.2,col:0xa16207,shape:'cylinder',label:'Barrel'},
+    fence: {w:3.0,h:1.4,d:0.3,col:0x78350f,shape:'box',label:'Fence'},
+    spike: {w:0.6,h:2.5,d:0.6,col:0xdc2626,shape:'cone',label:'Spike'},
+  }
+};
+
 function spawnObstacle(){
   const lane=Math.floor(Math.random()*3);
-  const types=['bus','barrier','crate'];
-  const type=types[Math.floor(Math.random()*types.length)];
-  const dims={bus:{w:2.0,h:2.2,d:4.5},barrier:{w:1.2,h:1.8,d:0.6},crate:{w:1.4,h:1.4,d:1.4}};
-  const d=dims[type];
-  const col=type==='bus'?0xef4444:type==='barrier'?0xf59e0b:COLORS.obs;
-  const mesh=new THREE.Mesh(new THREE.BoxGeometry(d.w,d.h,d.d),new THREE.MeshPhongMaterial({color:col,emissive:col,emissiveIntensity:0.15}));
-  mesh.position.set(LANES[lane],d.h/2,-50);
+  const setKey=CR.obstacleStyle||'city';
+  const set=OBS_SETS[setKey]||OBS_SETS.city;
+  const typeName=set.types[Math.floor(Math.random()*set.types.length)];
+  const obs=set[typeName];
+  let geo;
+  if(obs.shape==='sphere') geo=new THREE.SphereGeometry(obs.w/2,14,10);
+  else if(obs.shape==='cylinder') geo=new THREE.CylinderGeometry(obs.w/2,obs.w/2,obs.h,14);
+  else if(obs.shape==='cone') geo=new THREE.ConeGeometry(obs.w/2,obs.h,10);
+  else geo=new THREE.BoxGeometry(obs.w,obs.h,obs.d);
+  const mat=new THREE.MeshPhongMaterial({color:obs.col,emissive:obs.col,emissiveIntensity:0.18,shininess:60});
+  const mesh=new THREE.Mesh(geo,mat);
+  mesh.position.set(LANES[lane],obs.h/2,-50);
   mesh.castShadow=true;
   CR.scene.add(mesh);
-  CR.obstacles.push({mesh,lane,type,h:d.h/2});
+  CR.obstacles.push({mesh,lane,type:typeName,h:obs.h/2});
 }
 
 function spawnCoin(){
@@ -27316,6 +27531,7 @@ function wireUI(){
   el('cr-tracks-toggle')&&(el('cr-tracks-toggle').onchange=e=>{CR.showTracks=e.target.value==='true';});
   el('cr-zone-toggle')&&(el('cr-zone-toggle').onchange=e=>{CR.zoneSwitch=e.target.value==='true';});
   el('cr-fog-toggle')&&(el('cr-fog-toggle').onchange=e=>{CR.fogZones=e.target.value==='true';});
+  el('cr-obs-style')&&(el('cr-obs-style').onchange=e=>{CR.obstacleStyle=e.target.value;});
 }
 
 function rebuildScenery(){
@@ -27468,6 +27684,7 @@ window.cityDashInit=function(){
           <button id="c3d-btn-recenter" class="btn btn-ghost btn-sm" style="flex:1">⌖ Center</button>
           <button id="c3d-btn-pgn" class="btn btn-ghost btn-sm" style="flex:1">Copy PGN</button>
           <button id="c3d-btn-movelist" class="btn btn-ghost btn-sm" style="flex:1">Hide Moves</button>
+          <button id="c3d-btn-freeze" class="btn btn-ghost btn-sm" style="width:100%">🔒 Freeze Cam</button>
         </div>
         <!-- Move list -->
         <div id="c3d-movelist-wrap" style="background:rgba(10,10,20,.92);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px;max-height:120px;overflow-y:auto">
@@ -27503,7 +27720,8 @@ const Chess3D = {
   matType:'plastic',
   glareColor:'blue', glareColors:{blue:0x3b82f6,red:0xef4444,green:0x22c55e,gold:0xf59e0b,off:null},
   started:false, animating:{},
-  showCoords:false
+  showCoords:false,
+  cameraFrozen:false
 };
 
 // Audio
@@ -27701,6 +27919,8 @@ function buildBoard(){
   Chess3D.boardGroup.add(labelMesh);
 
   s.add(Chess3D.boardGroup);
+  // Apply coord visibility immediately (default = off)
+  setCoordVis(Chess3D.showCoords);
 }
 
 // ── Piece meshes ───────────────────────────────────────────────────
@@ -28055,6 +28275,7 @@ function setupInteraction(root){
 }
 
 function updateCamera(){
+  if(Chess3D.cameraFrozen) return;
   const {theta,phi,radius,camera}=Chess3D;
   camera.position.set(radius*Math.sin(phi)*Math.cos(theta),radius*Math.cos(phi),radius*Math.sin(phi)*Math.sin(theta));
   camera.lookAt(0,0,0);
@@ -28349,6 +28570,12 @@ function wireUI(){
     sidebar.style.display=hidden?'':'none';
     hidePanel.textContent=hidden?'◀ Hide Panel':'▶ Show Panel';
   };
+  const freezeBtn=get('c3d-btn-freeze');
+  if(freezeBtn) freezeBtn.onclick=()=>{
+    Chess3D.cameraFrozen=!Chess3D.cameraFrozen;
+    freezeBtn.textContent=Chess3D.cameraFrozen?'🔓 Unfreeze Cam':'🔒 Freeze Cam';
+    freezeBtn.style.background=Chess3D.cameraFrozen?'rgba(59,130,246,.25)':'';
+  };
   const pgnBtn=get('c3d-btn-pgn');
   if(pgnBtn) pgnBtn.onclick=()=>{
     const ta=document.createElement('textarea');
@@ -28419,6 +28646,8 @@ function cityDashShow(){
     window.dispatchEvent(new Event('resize'));
   },100);
 }
+function crManualShow(){var m=document.getElementById('cr-manual');if(m)m.style.display='block';}
+function crManualHide(){var m=document.getElementById('cr-manual');if(m)m.style.display='none';}
 function cityDashHide(){
   var main=document.getElementById('tilted-main-content');
   var panel=document.getElementById('city-dash-panel');
