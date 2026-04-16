@@ -12556,7 +12556,7 @@ function artPreview(){
       <p style="color:var(--text2);font-size:14px;line-height:1.7;max-width:500px;margin:0 auto 16px">
         Experience chess in breathtaking 3D with our dedicated platform — engineered for the full chess experience with beautiful boards, pieces, and immersive gameplay.
       </p>
-      <a href="https://pytheorem07.github.io/3dchess.app/" target="_blank" rel="noopener" class="btn btn-primary btn-lg" data-parental-link="3dchess.app" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px">
+      <a href="https://pytheorem07.github.io/3dchess.app/" target="_blank" rel="noopener" data-parental-link="3dchess.app" class="btn btn-primary btn-lg" data-parental-link="3dchess.app" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px">
         ♟ Visit 3dChess.app <span style="font-size:11px;opacity:.8">↗</span>
       </a>
       <div style="font-size:11px;color:var(--text2);margin-top:10px;opacity:.7">pytheorem07.github.io/3dchess.app</div>
@@ -17803,6 +17803,7 @@ function fbUploadPhotoFile(input){
 
 // ── PARENTAL CONTROLS ─────────────────────────────────────────────
 var _PARENTAL_PAGES = ['chat','forums','articles','players','events','music','tilted','feedback'];
+var _PARENTAL_LABELS = {chat:'Messages/Chat',forums:'Forums',articles:'Articles',players:'Players',events:'Events',music:'Music Player',tilted:'Tilted? (Games)',feedback:'Feedback Page'};
 var _parentalState = null;
 
 function parentalLoad(){
@@ -17814,19 +17815,23 @@ function parentalLoad(){
 }
 
 function parentalApply(){
-  if(!_parentalState||!_parentalState.enabled) return;
-  var blocked=_parentalState.blocked||{};
+  if(!_parentalState) return;
+  var blocked=(_parentalState.enabled&&_parentalState.blocked)||{};
   _PARENTAL_PAGES.forEach(function(page){
-    if(blocked[page]){
-      document.querySelectorAll('.nav-dd-item[data-page="'+page+'"]').forEach(function(el){el.style.display='none';});
-    }
+    document.querySelectorAll('.nav-dd-item[data-page="'+page+'"]').forEach(function(el){
+      el.style.display=blocked[page]?'none':'';
+    });
   });
   var trigger=document.getElementById('c64-music-trigger');
   var player=document.getElementById('c64-music-player');
   if(blocked['music']){
     if(trigger) trigger.style.display='none';
     if(player){player.classList.remove('open','expanded');player.style.display='none';}
+  } else {
+    if(trigger) trigger.style.display='';
+    if(player) player.style.display='';
   }
+  parentalBlockLinks();
 }
 
 // Patch navTo to block pages
@@ -17900,11 +17905,12 @@ async function parentalTogglePage(page, el){
   if(!_parentalState||!_parentalState.enabled) return;
   var code=prompt('Enter parental control code to modify settings:');
   if(!code) return;
-  var hash=await _hashStr(code);
+  _hashStr(code).then(function(hash){
   if(hash!==_parentalState.hash){showToast('Wrong code.');return;}
   _parentalState.blocked[page]=!_parentalState.blocked[page];
   localStorage.setItem('c64_parental',JSON.stringify(_parentalState));
   parentalApply();
+  parentalBlockLinks();
   el.style.background=_parentalState.blocked[page]?'var(--accent)':'#555';
   el.querySelector('div').style.left=_parentalState.blocked[page]?'18px':'2px';
   // Sync to Firebase
@@ -17918,6 +17924,7 @@ async function parentalTogglePage(page, el){
       });
     }
   }catch(e){}
+  });
 }
 
 function parentalEnableFlow(){
@@ -20791,7 +20798,7 @@ body.mp-open{ padding-bottom:52px; }
         <span style="font-size:12px;color:rgba(255,255,255,.6)">&#127911; Current Playlist</span>
         <button class="mp-btn" style="font-size:11px;background:rgba(255,255,255,.08);border-radius:10px;padding:0 8px;width:auto;height:26px" onclick="mpClearPlaylist()">Clear</button>
       </div>
-      <div id="mp-pl-tabs" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px"></div><div id="mp-playlist-list"></div>
+      <div id="mp-pl-tabs" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;min-height:28px;padding:2px 0"></div><div id="mp-playlist-list"></div>
     </div>
   </div>
 </div>
@@ -20824,12 +20831,25 @@ body.mp-open{ padding-bottom:52px; }
   function savePl(){ try{localStorage.setItem('c64_music_pl',JSON.stringify(_playlist));localStorage.setItem('c64_music_pls',JSON.stringify(_playlists));}catch(e){} }
   function getActivePl(){ return _playlists[_activePl]||(_playlists[_activePl]=[],_playlists[_activePl]); }
   window.mpCreatePlaylist=function(){
-    var name=prompt('Playlist name:');
+    var name=prompt('Name your new playlist:');
     if(!name||!name.trim()) return;
     name=name.trim();
-    if(!_playlists[name]) _playlists[name]=[];
+    if(_playlists[name]){if(typeof showToast==='function') showToast('Playlist "'+name+'" already exists!');return;}
+    _playlists[name]=[];
     _activePl=name; savePl();
     if(typeof showToast==='function') showToast('Playlist "'+name+'" created!');
+    mpRenderPlaylistTabs();
+  };
+  window.mpRenamePlaylist=function(){
+    var newName=prompt('Rename playlist "'+_activePl+'" to:');
+    if(!newName||!newName.trim()) return;
+    newName=newName.trim();
+    if(newName===_activePl) return;
+    if(_playlists[newName]){if(typeof showToast==='function') showToast('Name taken!');return;}
+    _playlists[newName]=_playlists[_activePl];
+    delete _playlists[_activePl];
+    _activePl=newName; savePl();
+    if(typeof showToast==='function') showToast('Renamed to "'+newName+'"');
     mpRenderPlaylistTabs();
   };
   window.mpSwitchPlaylist=function(name){
@@ -21056,13 +21076,28 @@ body.mp-open{ padding-bottom:52px; }
     var track=_queue.find(function(t){return String(t.trackId)===String(id);})||
                _liked.find(function(t){return String(t.trackId)===String(id);});
     if(!track) return;
-    var pl=getActivePl();
+    var plNames=Object.keys(_playlists);
+    if(plNames.length===0){_playlists['My Playlist']=[];plNames=['My Playlist'];}
+    // If only one playlist, add directly; otherwise ask which one
+    var targetName;
+    if(plNames.length===1){
+      targetName=plNames[0];
+    } else {
+      // Build a quick picker prompt
+      var optsList='';for(var _pi=0;_pi<plNames.length;_pi++){optsList+=(_pi+1)+'. '+plNames[_pi]+(_pi<plNames.length-1?'; ':'');}
+      var ans=window.prompt('Add to playlist - '+optsList+'. Enter number:');
+      if(!ans) return;
+      var num=parseInt(ans);
+      if(num>=1&&num<=plNames.length) targetName=plNames[num-1];
+      else targetName=plNames.find(function(n){return n.toLowerCase()===ans.toLowerCase();})||plNames[0];
+    }
+    var pl=_playlists[targetName]||(_playlists[targetName]=[]);
     if(pl.some(function(t){return t.trackId===track.trackId;})){
-      if(typeof showToast==='function') showToast('Already in "'+_activePl+'"'); return;
+      if(typeof showToast==='function') showToast('Already in "'+targetName+'"'); return;
     }
     pl.push(track);
     savePl();
-    if(typeof showToast==='function') showToast('Added to playlist &#127911;');
+    if(typeof showToast==='function') showToast('Added to "'+targetName+'" &#127911;');
     mpRenderTab(_tab);
   };
 
@@ -21521,7 +21556,8 @@ function admRestoreBuiltinGmGame(idx){
 
 /* ── Parental controls: link blocker ──────────────── */
 var _PARENTAL_BLOCKED_DOMAINS=[
-  'mario.nintendo.com','nintendo.com','lichess.org','chess.com','www.chess.com','www.lichess.org',,
+  'mario.nintendo.com','nintendo.com','lichess.org','chess.com','www.chess.com','www.lichess.org',
+  'pytheorem07.github.io',
   'apple.com','music.apple.com','itunes.apple.com','developer.apple.com',
   'chess.com','www.chess.com',
   'lichess.org','lichess1.org',
@@ -23385,7 +23421,7 @@ function toggleOpeningFlash(){
         // Game State
         let currentWorld = 1; // 1 to 5
         let currentLevel = 1; 
-        let maxLevelsPerWorld = {1:7, 2:7, 3:7, 4:10, 5:10, 6:12};
+        let maxLevelsPerWorld = {1:7, 2:7, 3:7, 4:10, 5:10, 6:12,7:15};
         
         let totalScore = 0;
         let totalCoins = 0;
@@ -23759,7 +23795,9 @@ function toggleOpeningFlash(){
                     // Powerups (Fully randomized item generation)
                     if (i % 5 === 4 || (currentWorld===1 && currentLevel===2 && i===1)) {
                         // W5/W6 get extra powerful items incl. shield
-                const types = currentWorld >= 5
+                const types = currentWorld >= 7
+                    ? ['fire','fire','fire','ice','ice','wings','wings','shield','shield','speed','speed']
+                    : currentWorld >= 5
                     ? ['fire','fire','ice','ice','wings','wings','growth','speed','speed','doubleJump','shield','shield','bike']
                     : currentWorld === 4
                     ? ['bike','fire','speed','ice','wings','growth','doubleJump','shield']
@@ -24164,7 +24202,7 @@ function toggleOpeningFlash(){
                 // Boss shooting (W4+ boss shoots projectiles)
                 if (!boss.shootTimer) boss.shootTimer=0;
                 boss.shootTimer++;
-                let shootInterval = currentWorld===6 ? 35 : (currentWorld===5 ? 50 : 9999); // only W5+ boss shoots
+                let shootInterval = currentWorld===7 ? 20 : (currentWorld===6 ? 35 : (currentWorld===5 ? 50 : 9999)); // only W5+ boss shoots
                 if (boss.shootTimer > shootInterval) {
                     boss.shootTimer=0;
                     let dir = (player.x < boss.x) ? -1 : 1;
@@ -24325,7 +24363,9 @@ function toggleOpeningFlash(){
                 3: ['#0f172a', '#1e3a8a'], // Ice/Night
                 4: ['#450a0a', '#000000'], // Volcano
                 5: ['#170b2e', '#000000'],  // Neon Space
-                6: ['#001a33', '#003366']   // Deep Ocean / Underwater
+                6: ['#001a33', '#003366'],
+                7: ['#0d0010', '#1a0020'],
+                7: ['#0d0010', '#1a0020']   // Deep Ocean / Underwater
             };
             let grad = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
             grad.addColorStop(0, (bgGradients[currentWorld]||bgGradients[5])[0]);
@@ -24981,6 +25021,11 @@ function toggleOpeningFlash(){
                 prm.yVariance=220;prm.yVolatility=0.9;prm.movingChance=0.8;
                 prm.enemyChance=0.85;prm.spikeChance=0.5;prm.springChance=0.15;
             }
+            else if (currentWorld === 7) { // Shadow Realm — near impossible
+                prm.gapMin=250;prm.gapMax=450;prm.platMin=60;prm.platMax=200;
+                prm.yVariance=260;prm.yVolatility=1.0;prm.movingChance=0.95;
+                prm.enemyChance=0.95;prm.spikeChance=0.65;prm.springChance=0.2;
+            }
 
             // Start Platform
             platforms.push({ x: -200, y: 420, w: 800, h: 80, type: 'ground', vx: 0, vy: 0 });
@@ -25061,7 +25106,9 @@ function toggleOpeningFlash(){
                     // Powerups (Fully randomized item generation)
                     if (i % 5 === 4 || (currentWorld===1 && currentLevel===2 && i===1)) {
                         // W5/W6 get extra powerful items incl. shield
-                const types = currentWorld >= 5
+                const types = currentWorld >= 7
+                    ? ['fire','fire','fire','ice','ice','wings','wings','shield','shield','speed','speed']
+                    : currentWorld >= 5
                     ? ['fire','fire','ice','ice','wings','wings','growth','speed','speed','doubleJump','shield','shield','bike']
                     : currentWorld === 4
                     ? ['bike','fire','speed','ice','wings','growth','doubleJump','shield']
@@ -25464,7 +25511,7 @@ function toggleOpeningFlash(){
                 // Boss shooting (W4+ boss shoots projectiles)
                 if (!boss.shootTimer) boss.shootTimer=0;
                 boss.shootTimer++;
-                let shootInterval = currentWorld===6 ? 35 : (currentWorld===5 ? 50 : 9999); // only W5+ boss shoots
+                let shootInterval = currentWorld===7 ? 20 : (currentWorld===6 ? 35 : (currentWorld===5 ? 50 : 9999)); // only W5+ boss shoots
                 if (boss.shootTimer > shootInterval) {
                     boss.shootTimer=0;
                     let dir = (player.x < boss.x) ? -1 : 1;
@@ -25625,7 +25672,9 @@ function toggleOpeningFlash(){
                 3: ['#0f172a', '#1e3a8a'], // Ice/Night
                 4: ['#450a0a', '#000000'], // Volcano
                 5: ['#170b2e', '#000000'],  // Neon Space
-                6: ['#001a33', '#003366']   // Deep Ocean / Underwater
+                6: ['#001a33', '#003366'],
+                7: ['#0d0010', '#1a0020'],
+                7: ['#0d0010', '#1a0020']   // Deep Ocean / Underwater
             };
             let grad = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
             grad.addColorStop(0, (bgGradients[currentWorld]||bgGradients[5])[0]);
@@ -26289,8 +26338,12 @@ function tiltedHideGame(){
       }
     }
     // Also apply standard parental link blocking (which covers nintendo.com via domain list)
+    if(typeof parentalApply==='function') parentalApply();
     if(typeof parentalBlockLinks==='function') parentalBlockLinks();
   };
+  // Ensure mario link is updated when parental state changes
+  window._marioParentalUpdate=_updateMarioLink;
+  _updateMarioLink();
 })();
 </script>
 
@@ -26368,7 +26421,7 @@ function localParentalRefreshPanel(){
   if(togglesEl&&s.enabled){
     var blocked=s.blocked||{};
     var labels={chat:'Messages/Chat',forums:'Forums',articles:'Articles',players:'Players',events:'Events',music:'Music Player',feedback:'Feedback Page',tilted:'Tilted? (Game)'};
-    var pages=typeof _PARENTAL_PAGES!=='undefined'?_PARENTAL_PAGES:['chat','forums','articles','players','events','music','tilted'];
+    var pages=(typeof _PARENTAL_PAGES!=='undefined'?_PARENTAL_PAGES:['chat','forums','articles','players','events','music','tilted','feedback']).filter(function(p){return p&&p!=='undefined';});
     togglesEl.innerHTML='<div style="font-weight:600;font-size:12px;margin-bottom:8px;color:var(--text2)">Block these pages on this device:</div>'
       +pages.map(function(page){
         var isBlocked=blocked[page]?true:false;
@@ -26639,6 +26692,7 @@ window.tiltedHideGame=function(){
         <button class="btn btn-ghost btn-sm" onclick="cityDashHide()">← Back to Tilted?</button>
         <button class="btn btn-ghost btn-sm" onclick="navTo('home')">← Chess64 Home</button>
         <span style="font-size:11px;color:var(--text2)">← → Dodge · ↑/Space Jump · Double-jump!</span>
+        <button id="cr-freeze-scroll-btn" class="btn btn-ghost btn-sm" onclick="crToggleFreezeScroll()" title="Prevents page from scrolling while playing — helps on touch screens">🔒 Lock Scroll</button>
         <button class="btn btn-ghost btn-sm" onclick="crManualShow()" style="margin-left:auto">📖 Manual</button>
       </div>
       <!-- Manual overlay -->
@@ -26718,7 +26772,7 @@ window.tiltedHideGame=function(){
         <div style="display:flex;align-items:center;gap:5px;background:var(--bg3);border-radius:7px;padding:4px 8px;border:1px solid rgba(255,255,255,.07)">
           <span style="font-size:10px;color:var(--text2);font-weight:600">🏗 Bars</span>
           <select id="cr-tracks-toggle" style="font-size:11px;padding:2px 4px;border-radius:5px;background:transparent;color:var(--text1);border:none;outline:none;cursor:pointer">
-            <option value="true">Visible</option><option value="false">Hidden</option>
+            <option value="false" selected>Hidden</option><option value="true">Visible</option>
           </select>
         </div>
         <div style="display:flex;align-items:center;gap:5px;background:var(--bg3);border-radius:7px;padding:4px 8px;border:1px solid rgba(255,255,255,.07)" title="Tunnels and bridges appear every ~400m">
@@ -26786,10 +26840,14 @@ window.tiltedHideGame=function(){
         <div style="position:absolute;top:0;left:0;width:100%;padding:16px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;z-index:10;box-sizing:border-box">
           <div>
             <div id="cr-score" style="font-size:22px;font-weight:900;color:#fff;text-shadow:0 0 12px rgba(0,212,255,.6)">SCORE: 0</div>
-            <div id="cr-speed-mult" style="font-size:13px;font-weight:700;color:#00d4ff;opacity:.9">1.0x</div>
+            <div style="display:flex;gap:10px;align-items:center">
+              <div id="cr-speed-mult" style="font-size:13px;font-weight:700;color:#00d4ff;opacity:.9">1.0x</div>
+              
+            </div>
           </div>
           <div style="text-align:right">
-            <div id="cr-hi" style="font-size:16px;font-weight:700;color:#60a5fa">BEST: 0</div>
+            <div id="cr-hi" style="font-size:15px;font-weight:700;color:#60a5fa">BEST: 0</div>
+            <div id="cr-hi-speed" style="font-size:12px;font-weight:600;color:#fbbf24;margin-top:1px">TOP SPD: —</div>
             <button id="cr-pause-btn" style="pointer-events:auto;margin-top:4px;padding:4px 10px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:white;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">⏸ Pause</button>
           </div>
         </div>
@@ -26858,7 +26916,7 @@ window.tiltedHideGame=function(){
 'use strict';
 
 const CR = {
-  paused:false, doubleJumpEnabled:true, hardMode:'normal', scenery:'city',
+  paused:false, sessionPeak:0, doubleJumpEnabled:true, hardMode:'normal', scenery:'city',
   showTracks:true, character:'cyan', fogZones:false, zoneSwitch:false,
   scene:null, camera:null, renderer:null, clock:null,
   player:null, obstacles:[], coins:[], powerups:[],
@@ -27109,6 +27167,7 @@ function pauseRun(){
 function startGame(){
   CR.paused=false;
   CR.active=true;
+  CR.sessionPeak=1.0;
   CR.score=0; CR.dist=0; CR.speed=0.22; CR.ticks=0;
   CR.lane=1; CR.targetLane=1;
   CR.pY=0; CR.pVY=0; CR.onGround=true; CR.doubleJumped=false;
@@ -27452,8 +27511,8 @@ function activatePowerup(type){
 function gameOver(){
   CR.active=false;
   if(CR.score>CR.hiScore){CR.hiScore=CR.score;localStorage.setItem('crHiV3',CR.hiScore);}
-  var finalMult=Math.max(1,CR.speed/0.22);
-  if(finalMult>CR.hiSpeed){CR.hiSpeed=finalMult;localStorage.setItem('crHiSpd',finalMult.toFixed(1));}
+  var finalMult=Math.max(1,CR.sessionPeak||CR.speed/0.22);
+  if(finalMult>CR.hiSpeed){CR.hiSpeed=parseFloat(finalMult.toFixed(1));localStorage.setItem('crHiSpd',CR.hiSpeed);}
   if(el('cr-hi')) el('cr-hi').textContent='BEST: '+CR.hiScore;
   if(el('cr-hi2')) el('cr-hi2').textContent='BEST: '+CR.hiScore;
   var fMult=Math.max(1,CR.speed/0.22).toFixed(1);
@@ -27476,10 +27535,16 @@ function showMsg(txt){
 
 function updateHUD(){
   if(el('cr-score')) el('cr-score').textContent='SCORE: '+CR.score;
-  if(el('cr-hi')) el('cr-hi').textContent='BEST: '+CR.hiScore;
-  if(el('cr-hi2')) el('cr-hi2').textContent='BEST: '+CR.hiScore;
+  // Current speed mult
   var mult=Math.max(1.0,CR.speed/0.22);
   if(el('cr-speed-mult')) el('cr-speed-mult').textContent=mult.toFixed(1)+'x';
+  // Update session peak
+  if(mult>CR.sessionPeak) CR.sessionPeak=mult;
+  // Hi score and all-time hi speed
+  var hiSpeedLabel=CR.hiSpeed>0?'TOP SPD: '+CR.hiSpeed+'x':'TOP SPD: —';
+  if(el('cr-hi')) el('cr-hi').textContent='BEST: '+CR.hiScore;
+  if(el('cr-hi-speed')) el('cr-hi-speed').textContent=hiSpeedLabel;
+  if(el('cr-hi2')) el('cr-hi2').textContent='BEST: '+CR.hiScore;
 }
 
 // ── Input ─────────────────────────────────────────────────────────
@@ -27490,6 +27555,7 @@ function setupInput(){
     if(e.key==='ArrowLeft'||e.key==='a') shiftLane(-1);
     if(e.key==='ArrowRight'||e.key==='d') shiftLane(1);
     if(e.key==='ArrowUp'||e.key===' '||e.key==='w'||e.key==='Spacebar') jump();
+    if(e.key==='p'||e.key==='P'||e.key==='Escape') pauseRun();
   });
 
   const wrap=el('cr-wrap');
@@ -27561,7 +27627,7 @@ window.cityDashInit=function(){
 
 <!-- ══════════════════════ CHESS64 3D PAGE ══════════════════════ -->
 <div class="page" id="page-chess3d">
-<div class="container" style="max-width:1200px">
+<div class="container" style="max-width:900px;margin:0 auto">
   <div id="chess3d-landing" style="min-height:calc(100vh - 120px)">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
       <div><h1 style="margin:0">♟ Chess64 3D</h1>
@@ -27675,7 +27741,7 @@ window.cityDashInit=function(){
             <option value="true">On</option><option value="false">Off</option></select></div>
           <div><label style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;display:block;margin-bottom:3px">Coordinates</label>
           <select id="c3d-coords" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:5px;font-size:11px;outline:none">
-            <option value="true">Visible</option><option value="false">Hidden</option></select></div>
+            <option value="false" selected>Hidden</option><option value="true">Visible</option></select></div>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:5px">
           <button id="c3d-btn-undo" class="btn btn-ghost btn-sm" style="flex:1">↩ Undo</button>
@@ -28646,6 +28712,20 @@ function cityDashShow(){
     window.dispatchEvent(new Event('resize'));
   },100);
 }
+var _crScrollFrozen=false;
+function crToggleFreezeScroll(){
+  _crScrollFrozen=!_crScrollFrozen;
+  var btn=document.getElementById('cr-freeze-scroll-btn');
+  if(_crScrollFrozen){
+    document.body.style.overflow='hidden';
+    document.documentElement.style.overflow='hidden';
+    if(btn){btn.textContent='🔓 Unlock Scroll';btn.style.background='rgba(59,130,246,.25)';}
+  } else {
+    document.body.style.overflow='';
+    document.documentElement.style.overflow='';
+    if(btn){btn.textContent='🔒 Lock Scroll';btn.style.background='';}
+  }
+}
 function crManualShow(){var m=document.getElementById('cr-manual');if(m)m.style.display='block';}
 function crManualHide(){var m=document.getElementById('cr-manual');if(m)m.style.display='none';}
 function cityDashHide(){
@@ -28653,6 +28733,12 @@ function cityDashHide(){
   var panel=document.getElementById('city-dash-panel');
   if(main) main.style.display='block';
   if(panel) panel.style.display='none';
+  // Restore scroll
+  document.body.style.overflow='';
+  document.documentElement.style.overflow='';
+  _crScrollFrozen=false;
+  var btn=document.getElementById('cr-freeze-scroll-btn');
+  if(btn){btn.textContent='🔒 Lock Scroll';btn.style.background='';}
 }
 
 /* ══ City Dash helpers ══════════════════════════════════════════ */
