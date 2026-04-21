@@ -1491,6 +1491,7 @@ if(_fbReady && _auth){
       <button class="nav-dd-item" onclick="navTo('forums');navCloseAll()" data-page="forums">💬 Forums</button>
       <button class="nav-dd-item" onclick="navTo('chat');navCloseAll()" data-page="chat">✉️ Chat</button>
       <button class="nav-dd-item" onclick="navTo('articles');navCloseAll()" data-page="articles">📰 Articles</button>
+      <button class="nav-dd-item" onclick="navTo('bookreviews');navCloseAll()" data-page="bookreviews">📚 Book Reviews</button>
       <button class="nav-dd-item" onclick="navTo('players');navCloseAll()" data-page="players">🏅 Players</button>
       <button class="nav-dd-item" onclick="navTo('events');navCloseAll()" data-page="events">📅 Events</button>
     </div>
@@ -6394,6 +6395,7 @@ function navTo(page){
     if(_mbtn){_mbtn.textContent='📱 Mobile Controls: OFF';_mbtn.style.background='';}
   }
   curPage=page;
+  if(page==='bookreviews'){setTimeout(function(){if(typeof brInit==='function')brInit();},100);}
   if(page==='home'){setTimeout(()=>{try{initHomeDemo();}catch(e){}},50);setTimeout(()=>{try{showTrivia();}catch(e){}},100);}
   else if(page==='play'){renderPlayBoard();renderBotGrid();renderMyBots();renderEmojiGrid();}
   else if(page==='puzzles'&&!pzGs){loadPuzzle(0);}
@@ -10475,7 +10477,7 @@ function gmAnalyze(){
   },150);
 }
 // Keyboard navigation for GM games
-document.addEventListener('keydown',e=>{
+document.addEventListener('keydown',e=>{ if(e.key==='p'||e.key==='P'){if(typeof window.marioTogglePause==='function'&&typeof gameActive!=='undefined'&&gameActive)window.marioTogglePause();return;} 
   if(document.getElementById('page-annotated')?.classList.contains('active')&&gmCurGame){
     if(e.key==='ArrowRight')gmStep(1);
     else if(e.key==='ArrowLeft')gmStep(-1);
@@ -11140,6 +11142,7 @@ function printBoard(){
           <button class="fb-tab" id="adm-tab-usernames" onclick="admTab('usernames')" style="flex:none;padding:5px 10px;font-size:11px">&#128100; Usernames</button>
           <button class="fb-tab" id="adm-tab-puzzles" onclick="admTab('puzzles')" style="flex:none;padding:5px 10px;font-size:11px">&#129513; Puzzles</button>
           <button class="fb-tab" id="adm-tab-gmgames" onclick="admTab('gmgames')" style="flex:none;padding:5px 10px;font-size:11px">&#9812; GM Games</button>
+          <button class="fb-tab" id="adm-tab-bookreviews" onclick="admTab('bookreviews')" style="flex:none;padding:4px 8px;font-size:11px">📚 Book Reviews</button>
           <button class="fb-tab" id="adm-tab-titles" onclick="admTab('titles')" style="flex:none;padding:5px 10px;font-size:11px">&#127942; Titles</button>
           <button class="fb-tab" id="adm-tab-custbots" onclick="admTab('custbots')" style="flex:none;padding:5px 10px;font-size:11px">&#129302; Bot Requests</button>
           <button class="fb-tab" id="adm-tab-reports" onclick="admTab('reports')" style="flex:none;padding:5px 10px;font-size:11px">🚩 Reports</button>
@@ -11175,6 +11178,15 @@ function printBoard(){
             <button class="btn btn-ghost btn-sm" onclick="artOpenEditor(null);fbCloseModal()">✍️ Write</button>
           </div>
           <div id="adm-articles-list" style="max-height:280px;overflow-y:auto"></div>
+        </div>
+        <!-- book reviews tab -->
+        <div id="adm-pane-bookreviews" style="display:none">
+          <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn btn-primary btn-sm" onclick="admLoadAllBookReviews()">🔄 Load All Reviews</button>
+            <input id="adm-br-search" type="text" placeholder="Search reviews..." oninput="admFilterBookReviews()"
+              style="flex:1;max-width:220px;padding:5px 9px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
+          </div>
+          <div id="adm-bookreviews-list" style="max-height:320px;overflow-y:auto"></div>
         </div>
         <!-- broadcast tab -->
         <div id="adm-pane-broadcast" style="display:none">
@@ -11751,6 +11763,67 @@ window._onFbAuthChange = function(user, isAdmin){
     setTimeout(artLoadHomeFeature, 500);
   }
 };
+window.admLoadAllBookReviews=async function(){
+  var el=document.getElementById('adm-bookreviews-list');
+  if(!el)return;
+  el.innerHTML='<div class="spinner" style="margin:10px auto;display:block"></div>';
+  try{
+    var tok=await window._fb.user.getIdToken();
+    var url='https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/bookreviews?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&pageSize=50';
+    var r=await fetch(url,{headers:{Authorization:'Bearer '+tok}});
+    var data=await r.json();
+    window._admBrAll=[];
+    if(data.documents){
+      window._admBrAll=data.documents.map(function(d){
+        var f=d.fields||{};
+        return {id:d.name.split('/').pop(),
+          title:(f.title&&f.title.stringValue)||'Untitled',
+          author:(f.authorName&&f.authorName.stringValue)||'?',
+          isDraft:(f.isDraft&&f.isDraft.booleanValue)||false,
+          bookTitle:(f.bookTitle&&f.bookTitle.stringValue)||''};
+      });
+    }
+    admRenderBookReviews(window._admBrAll);
+  }catch(e){if(el)el.innerHTML='<p style="color:#ef4444;font-size:12px">Error: '+e.message+'</p>';}
+};
+window.admRenderBookReviews=function(reviews){
+  var el=document.getElementById('adm-bookreviews-list');
+  if(!el)return;
+  if(!reviews.length){el.innerHTML='<p style="color:var(--text2);font-size:12px">No reviews found.</p>';return;}
+  var html='';
+  reviews.forEach(function(r){
+    html+='<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">';
+    html+='<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.title+(r.isDraft?' <span style="color:#f59e0b;font-size:10px">[DRAFT]</span>':'')+'</div>';
+    html+='<div style="font-size:11px;color:var(--text2)">'+r.author+(r.bookTitle?' &middot; '+r.bookTitle:'')+'</div></div>';
+    html+='<button data-brid="'+r.id+'" class="adm-br-edit" style="padding:3px 8px;font-size:10px;background:rgba(59,130,246,.2);border:1px solid rgba(59,130,246,.3);color:#60a5fa;border-radius:5px;cursor:pointer;flex-shrink:0">Edit</button>';
+    html+='<button data-brid="'+r.id+'" class="adm-br-del" style="padding:3px 8px;font-size:10px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#f87171;border-radius:5px;cursor:pointer;flex-shrink:0">Del</button>';
+    html+='</div>';
+  });
+  el.innerHTML=html;
+  el.querySelectorAll('.adm-br-edit').forEach(function(b){b.onclick=function(){admEditBookReview(this.dataset.brid);};});
+  el.querySelectorAll('.adm-br-del').forEach(function(b){b.onclick=function(){admDeleteBookReview(this.dataset.brid);};});
+};
+window.admFilterBookReviews=function(){
+  var q=(document.getElementById('adm-br-search').value||'').toLowerCase();
+  if(!window._admBrAll)return;
+  admRenderBookReviews(window._admBrAll.filter(function(r){return !q||(r.title+r.author+r.bookTitle).toLowerCase().includes(q);}));
+};
+window.admEditBookReview=function(id){
+  // Open the book review editor if available, otherwise open reviews page
+  if(typeof brOpenEditor==='function'){navTo('bookreviews');setTimeout(function(){brOpenEditor(id);},200);}
+  else{showToast('Open Book Reviews page to edit.');}
+};
+window.admDeleteBookReview=async function(id){
+  if(!confirm('Delete this book review? This cannot be undone.'))return;
+  try{
+    var tok=await window._fb.user.getIdToken();
+    await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/bookreviews/'+id+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',
+      {method:'DELETE',headers:{Authorization:'Bearer '+tok}});
+    showToast('Review deleted.');
+    if(typeof admLoadAllBookReviews==='function')admLoadAllBookReviews();
+  }catch(e){showToast('Error: '+e.message);}
+};
+
 
 // ── SHOW FIREBASE SETUP NOTICE if config not filled in ───────────
 setTimeout(()=>{
@@ -17802,8 +17875,8 @@ function fbUploadPhotoFile(input){
 })();
 
 // ── PARENTAL CONTROLS ─────────────────────────────────────────────
-var _PARENTAL_PAGES = ['chat','forums','articles','players','events','music','tilted','feedback'];
-var _PARENTAL_LABELS = {chat:'Messages/Chat',forums:'Forums',articles:'Articles',players:'Players',events:'Events',music:'Music Player',tilted:'Tilted? (Games)',feedback:'Feedback Page'};
+var _PARENTAL_PAGES = ['chat','forums','articles','players','events','music','tilted','feedback','bookreviews'];
+var _PARENTAL_LABELS = {chat:'Messages/Chat',forums:'Forums',articles:'Articles',players:'Players',events:'Events',music:'Music Player',tilted:'Tilted? (Games)',feedback:'Feedback Page',bookreviews:'Book Reviews'};
 var _parentalState = null;
 
 function parentalLoad(){
@@ -17876,7 +17949,7 @@ function parentalShowSetup(){
     +(state.enabled?'<div style="margin-bottom:12px"><div style="font-weight:700;font-size:13px;margin-bottom:8px">Blocked Pages:</div>'
     +_PARENTAL_PAGES.map(function(page){
       var isBlocked=blocked[page]?true:false;
-      var labels={chat:'Messages/Chat',forums:'Forums',articles:'Articles',players:'Players',events:'Events',music:'Music Player',feedback:'Feedback Page',tilted:'Tilted? (Game)'};
+      var labels={chat:'Messages/Chat',forums:'Forums',articles:'Articles',players:'Players',events:'Events',music:'Music Player',feedback:'Feedback Page',bookreviews:'Book Reviews',tilted:'Tilted? (Game)'};
       return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">'
         +'<span style="font-size:13px">'+labels[page]+'</span>'
         +'<div style="width:36px;height:20px;border-radius:10px;background:'+(isBlocked?'var(--accent)':'#555')+';cursor:pointer;position:relative;transition:background .2s" '
@@ -17910,7 +17983,8 @@ async function parentalTogglePage(page, el){
   _parentalState.blocked[page]=!_parentalState.blocked[page];
   localStorage.setItem('c64_parental',JSON.stringify(_parentalState));
   parentalApply();
-  parentalBlockLinks();
+  clearTimeout(window._pblTimer);
+  window._pblTimer=setTimeout(parentalBlockLinks,80);
   el.style.background=_parentalState.blocked[page]?'var(--accent)':'#555';
   el.querySelector('div').style.left=_parentalState.blocked[page]?'18px':'2px';
   // Sync to Firebase
@@ -19385,7 +19459,7 @@ window.submitBotForCommunity = async function(){
 // ── 6. ADMIN TABS: patch admTab for all new tabs ───────────────────
 (function(){
   var _o = window.admTab;
-  var ALL_TABS = ['analytics','users','articles','broadcast','requests','reports',
+  var ALL_TABS = ['analytics','users','articles','bookreviews','broadcast','requests','reports',
                   'usernames','parental','chats','puzzles','gmgames','titles','custbots'];
   window.admTab = function(t){
     if(ALL_TABS.indexOf(t)>-1){
@@ -21587,12 +21661,38 @@ function parentalBlockLinks(){
       a.style.cursor='default';
     }
   });
-  // Also block future dynamic content via MutationObserver
+  // Directly handle mario-official-link (set dynamically, no href in HTML)
+  var marioLk=document.getElementById('mario-official-link');
+  if(marioLk){
+    var enabled=typeof _parentalState!=='undefined'&&_parentalState&&_parentalState.enabled;
+    var tiltedBlocked=enabled&&_parentalState.blocked&&_parentalState.blocked['tilted'];
+    if(tiltedBlocked||enabled){
+      // Also check domain list
+      var mHref='https://mario.nintendo.com';
+      var domBlocked=_PARENTAL_BLOCKED_DOMAINS.some(function(d){return mHref.includes(d);});
+      if(tiltedBlocked||domBlocked){
+        marioLk.removeAttribute('href');
+        marioLk.style.pointerEvents='none';
+        marioLk.style.opacity='0.4';
+        marioLk.title='Blocked by parental controls';
+      } else {
+        marioLk.href=mHref;
+        marioLk.style.pointerEvents='';
+        marioLk.style.opacity='';
+        marioLk.title='';
+      }
+    } else if(!enabled){
+      // Parental off — restore link
+      marioLk.href='https://mario.nintendo.com';
+      marioLk.style.pointerEvents='';
+      marioLk.style.opacity='';
+      marioLk.title='';
+    }
+  }
+  // MutationObserver for future dynamic links
   if(!window._parentalLinkObserver){
     window._parentalLinkObserver=new MutationObserver(function(){
-      if(_parentalState&&_parentalState.enabled&&_parentalState.blocked&&_parentalState.blocked['links']){
-        parentalBlockLinks();
-      }
+      if(_parentalState&&_parentalState.enabled) parentalBlockLinks();
     });
     window._parentalLinkObserver.observe(document.body,{childList:true,subtree:true});
   }
@@ -23255,7 +23355,7 @@ function toggleOpeningFlash(){
           <div style="flex:1;min-width:220px">
             <h3 style="margin:0 0 6px">Super Mario Ultra Deluxe</h3>
             <p style="color:var(--text2);font-size:13px;margin:0 0 6px">Arrow keys / WASD to move, Space / Up / W to jump. F to shoot fireballs. Collect coins, stomp enemies, reach the flag!</p>
-            <p style="color:var(--text2);font-size:11px;margin:0 0 4px">⚠️ <strong>This is an unofficial hobby project</strong> — not affiliated with or intended to compete with Nintendo's Mario franchise. Please support the <a href="https://mario.nintendo.com" target="_blank" id="mario-official-link" style="color:var(--accent)">official Mario games by Nintendo</a>!</p>
+            <p style="color:var(--text2);font-size:11px;margin:0 0 4px">⚠️ <strong>This is an unofficial hobby project</strong> — not affiliated with or intended to compete with Nintendo's Mario franchise. Please support the <a data-parental-link="nintendo.com"  data-parental-link="nintendo.com" href="https://mario.nintendo.com" target="_blank" id="mario-official-link" style="color:var(--accent)">official Mario games by Nintendo</a>!</p>
             <p style="color:var(--text2);font-size:11px;margin:0 0 12px">📱 Note: This game is designed for desktop keyboards and may not work well on mobile devices.</p>
             <button class="btn btn-primary" onclick="tiltedShowGame()">▶ Play Super Mario Ultra Deluxe</button>
           </div>
@@ -23270,7 +23370,10 @@ function toggleOpeningFlash(){
         <button class="btn btn-ghost btn-sm" onclick="navTo('home')">← Chess64 Home</button>
         <span style="font-size:11px;color:var(--text2);margin-left:auto">Arrow keys / WASD + Space to play · F to shoot · ⚠️ Desktop recommended</span>
       </div>
-      <div id="mario4-wrap">
+      <div style="position:relative">
+  <button id="btnMarioPause" onclick="marioTogglePause()"
+    style="display:none;position:absolute;top:8px;right:8px;z-index:200;padding:5px 14px;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.35);color:white;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;backdrop-filter:blur(4px)">⏸ Pause</button>
+<div id="mario4-wrap">
         <style>
 
         @import url('https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,800;0,900;1,900&display=swap');
@@ -23427,6 +23530,12 @@ function toggleOpeningFlash(){
         let totalCoins = 0;
         let lives = 3;
         let isPaused = true;
+        // Expose pause setter so external button can freeze the actual game loop
+        window._marioSetPaused = function(val){
+            isPaused = val;
+            var pb=document.getElementById('btnMarioPause');
+            if(pb) pb.textContent = val ? '▶ Resume' : '⏸ Pause';
+        };
         let gameActive = false;
         let camX = 0;
         let screenShake = 0;
@@ -23529,6 +23638,9 @@ function toggleOpeningFlash(){
 
         function showMainMenu() {
             isPaused = true; gameActive = false;
+            window._marioPaused=false;
+            var pb=document.getElementById('btnMarioPause');
+            if(pb){pb.style.display='none';pb.textContent='⏸ Pause';}
             document.querySelectorAll('.overlay').forEach(el => el.style.display = 'none');
             document.getElementById('ui-layer').style.display = 'none';
             document.getElementById('mainMenu').style.display = 'block';
@@ -23541,7 +23653,7 @@ function toggleOpeningFlash(){
             const grid = document.getElementById('levelGrid');
             grid.innerHTML = '';
             
-            for(let w = 1; w <= 5; w++) {
+            for(let w = 1; w <= 7; w++) {
                 let maxL = maxLevelsPerWorld[w];
                 for(let l = 1; l <= maxL; l++) {
                     let btn = document.createElement('button');
@@ -23568,6 +23680,10 @@ function toggleOpeningFlash(){
         function startGame() {
             document.querySelectorAll('.overlay').forEach(el => el.style.display = 'none');
             document.getElementById('ui-layer').style.display = 'flex';
+            // Show in-game pause button
+            var pb=document.getElementById('btnMarioPause');
+            if(pb){pb.style.display='block';pb.textContent='⏸ Pause';}
+            window._marioPaused=false;
             initLevel(true);
         }
 
@@ -24639,6 +24755,18 @@ function toggleOpeningFlash(){
         update(); // Start engine loop
     
         // Mobile controls toggle
+        
+        // Mario pause toggle
+        window._marioPaused = false;
+        window.marioTogglePause = function() {
+            window._marioPaused = !window._marioPaused;
+            if(typeof window._marioSetPaused === 'function'){
+                window._marioSetPaused(window._marioPaused);
+            } else {
+                var btn = document.getElementById('btnMarioPause');
+                if(btn) btn.textContent = window._marioPaused ? '▶ Resume' : '⏸ Pause';
+            }
+        };
         window.marioToggleMobileControls = function() {
             var dpad = document.getElementById('mario-dpad-overlay');
             var btn = document.getElementById('btnMobileControls');
@@ -24734,6 +24862,12 @@ function toggleOpeningFlash(){
         let totalCoins = 0;
         let lives = 3;
         let isPaused = true;
+        // Expose pause setter so external button can freeze the actual game loop
+        window._marioSetPaused = function(val){
+            isPaused = val;
+            var pb=document.getElementById('btnMarioPause');
+            if(pb) pb.textContent = val ? '▶ Resume' : '⏸ Pause';
+        };
         let gameActive = false;
         let camX = 0;
         let screenShake = 0;
@@ -24836,6 +24970,9 @@ function toggleOpeningFlash(){
 
         function showMainMenu() {
             isPaused = true; gameActive = false;
+            window._marioPaused=false;
+            var pb=document.getElementById('btnMarioPause');
+            if(pb){pb.style.display='none';pb.textContent='⏸ Pause';}
             document.querySelectorAll('.overlay').forEach(el => el.style.display = 'none');
             document.getElementById('ui-layer').style.display = 'none';
             document.getElementById('mainMenu').style.display = 'block';
@@ -24848,7 +24985,7 @@ function toggleOpeningFlash(){
             const grid = document.getElementById('levelGrid');
             grid.innerHTML = '';
             
-            for(let w = 1; w <= 5; w++) {
+            for(let w = 1; w <= 7; w++) {
                 let maxL = maxLevelsPerWorld[w];
                 for(let l = 1; l <= maxL; l++) {
                     let btn = document.createElement('button');
@@ -24875,6 +25012,10 @@ function toggleOpeningFlash(){
         function startGame() {
             document.querySelectorAll('.overlay').forEach(el => el.style.display = 'none');
             document.getElementById('ui-layer').style.display = 'flex';
+            // Show in-game pause button
+            var pb=document.getElementById('btnMarioPause');
+            if(pb){pb.style.display='block';pb.textContent='⏸ Pause';}
+            window._marioPaused=false;
             initLevel(true);
         }
 
@@ -26238,7 +26379,7 @@ function localParentalShowToggles(){
   var container=document.getElementById('local-parental-toggles');
   if(!container) return;
   container.style.display='block';
-  var labels={chat:'Messages/Chat',forums:'Forums',articles:'Articles',players:'Players',events:'Events',music:'Music Player',feedback:'Feedback Page',tilted:'Tilted? (Game)'};
+  var labels={chat:'Messages/Chat',forums:'Forums',articles:'Articles',players:'Players',events:'Events',music:'Music Player',feedback:'Feedback Page',bookreviews:'Book Reviews',tilted:'Tilted? (Game)'};
   container.innerHTML='<div style="font-weight:600;font-size:13px;margin-bottom:8px">Block these pages on this device:</div>'
     +(typeof _PARENTAL_PAGES!=='undefined'?_PARENTAL_PAGES:[]).map(function(page){
       var isBlocked=blocked[page]?true:false;
@@ -26321,11 +26462,12 @@ function tiltedHideGame(){
     if(_origApply) _origApply();
     var s=typeof _parentalState!=='undefined'?_parentalState:null;
     var localS=typeof localParentalGetState==='function'?localParentalGetState():{};
-    var blockLinks=(s&&s.enabled&&s.blockLinks)||(localS&&localS.blockLinks)||false;
-    // Block the nintendo link if parental is blocking external links
+    // Block the nintendo link if tilted page is blocked (account) OR local blockLinks
+    var tiltedBlocked=(s&&s.enabled&&s.blocked&&s.blocked['tilted'])||false;
+    var localTiltedBlocked=(localS&&localS.enabled&&localS.blocked&&localS.blocked['tilted'])||false;
     var mLink=document.getElementById('mario-official-link');
     if(mLink){
-      if(blockLinks){
+      if(tiltedBlocked||localTiltedBlocked){
         mLink.removeAttribute('href');
         mLink.style.pointerEvents='none';
         mLink.style.opacity='0.5';
@@ -26420,7 +26562,7 @@ function localParentalRefreshPanel(){
     :'<div style="background:rgba(250,204,21,.1);border:1px solid rgba(250,204,21,.4);border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:8px">Local controls are OFF on this device</div>';
   if(togglesEl&&s.enabled){
     var blocked=s.blocked||{};
-    var labels={chat:'Messages/Chat',forums:'Forums',articles:'Articles',players:'Players',events:'Events',music:'Music Player',feedback:'Feedback Page',tilted:'Tilted? (Game)'};
+    var labels={chat:'Messages/Chat',forums:'Forums',articles:'Articles',players:'Players',events:'Events',music:'Music Player',feedback:'Feedback Page',bookreviews:'Book Reviews',tilted:'Tilted? (Game)'};
     var pages=(typeof _PARENTAL_PAGES!=='undefined'?_PARENTAL_PAGES:['chat','forums','articles','players','events','music','tilted','feedback']).filter(function(p){return p&&p!=='undefined';});
     togglesEl.innerHTML='<div style="font-weight:600;font-size:12px;margin-bottom:8px;color:var(--text2)">Block these pages on this device:</div>'
       +pages.map(function(page){
@@ -27625,6 +27767,103 @@ window.cityDashInit=function(){
 
 </script>
 
+<!-- ══════════════════════ BOOK REVIEWS PAGE ══════════════════════ -->
+<div class="page" id="page-bookreviews">
+<div style="max-width:960px;margin:0 auto;padding:0 12px">
+
+  <!-- Header -->
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+    <div>
+      <h1 style="margin:0 0 4px">📚 Book Reviews</h1>
+      <p style="margin:0;color:var(--text2);font-size:13px">Chess books reviewed by our community of bloggers</p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <div id="br-write-btn-wrap" style="display:none">
+        <button class="btn btn-primary" onclick="brOpenEditor(null)">✍️ Write Review</button>
+      </div>
+      <div id="br-drafts-btn-wrap" style="display:none">
+        <button class="btn btn-ghost btn-sm" onclick="brLoadDrafts()">📁 My Drafts</button>
+      </div>
+      <button id="br-apply-blogger-btn" class="btn btn-ghost btn-sm" onclick="artShowApplyForm()" style="display:none">✍️ Apply to Write</button>
+    </div>
+  </div>
+
+  <!-- Search -->
+  <input id="br-search" type="text" placeholder="🔍 Search book reviews…"
+    oninput="brFilterList()"
+    style="width:100%;max-width:420px;padding:9px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;box-sizing:border-box;margin-bottom:16px">
+
+  <!-- Review list -->
+  <div id="br-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px"></div>
+
+  <!-- Empty state -->
+  <div id="br-empty" style="display:none;text-align:center;padding:60px 20px">
+    <div style="font-size:48px;margin-bottom:12px">📚</div>
+    <h2 style="margin:0 0 8px;color:var(--text2)">Book reviews are on the way, hold tight.</h2>
+    <p style="color:var(--text2);font-size:14px">Our bloggers are busy reading — reviews coming soon!</p>
+  </div>
+
+  <!-- Reader view -->
+  <div id="br-reader" style="display:none"></div>
+</div>
+</div>
+
+<!-- Book Review Editor Modal -->
+<div id="br-editor-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:5000;overflow-y:auto">
+<div style="max-width:820px;margin:40px auto;background:var(--bg2);border-radius:16px;padding:28px;border:1px solid var(--border);box-sizing:border-box">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <h2 id="br-editor-title" style="margin:0">✍️ Write Book Review</h2>
+    <button onclick="brCloseEditor()" style="background:transparent;border:1px solid var(--border);color:var(--text2);padding:6px 14px;border-radius:8px;cursor:pointer">✕ Close</button>
+  </div>
+  <input type="hidden" id="br-editing-id">
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <input id="br-inp-title" type="text" placeholder="Review title (e.g. 'My Thoughts on My System')"
+      style="padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px">
+    <input id="br-inp-book" type="text" placeholder="Book title & author"
+      style="padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px">
+    <input id="br-inp-cover" type="text" placeholder="Cover image URL (optional)"
+      style="padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px">
+    <div style="display:flex;gap:10px;align-items:center">
+      <label style="font-size:13px;color:var(--text2)">Rating:</label>
+      <select id="br-inp-rating" style="padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px">
+        <option value="5">⭐⭐⭐⭐⭐ 5 — Masterpiece</option>
+        <option value="4">⭐⭐⭐⭐ 4 — Excellent</option>
+        <option value="3">⭐⭐⭐ 3 — Good</option>
+        <option value="2">⭐⭐ 2 — Disappointing</option>
+        <option value="1">⭐ 1 — Not recommended</option>
+      </select>
+    </div>
+    <!-- Article toolbar (shared with articles) -->
+    <div id="br-editor-toolbar" style="display:flex;flex-wrap:wrap;gap:5px;padding:8px;background:var(--bg3);border-radius:8px">
+      <button class="btn btn-ghost btn-sm" onclick="brFmt('bold')"><strong>B</strong></button>
+      <button class="btn btn-ghost btn-sm" onclick="brFmt('italic')"><em>I</em></button>
+      <button class="btn btn-ghost btn-sm" onclick="brFmt('underline')"><u>U</u></button>
+      <button class="btn btn-ghost btn-sm" onclick="brFmt('insertUnorderedList')">• List</button>
+      <button class="btn btn-ghost btn-sm" onclick="brFmt('insertOrderedList')">1. List</button>
+      <button class="btn btn-ghost btn-sm" onclick="brInsertLink()">🔗 Link</button>
+      <button class="btn btn-ghost btn-sm" onclick="brInsertChessBoard()">♟ Chess Board</button>
+      <button class="btn btn-ghost btn-sm" onclick="brToggleHtml()" title="HTML mode">⟨/⟩</button>
+    </div>
+    <div id="br-editor-body" contenteditable="true"
+      style="min-height:260px;padding:14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;line-height:1.7;outline:none"></div>
+    <textarea id="br-editor-html" style="display:none;min-height:200px;padding:12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:#10b981;font-family:monospace;font-size:12px"></textarea>
+    <div id="br-editor-status" style="font-size:12px;color:var(--text2)"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="brSave(false)">🚀 Publish Review</button>
+      <button class="btn btn-ghost" onclick="brSave(true)">💾 Save Draft</button>
+      <button class="btn btn-ghost" onclick="brCloseEditor()">Cancel</button>
+    </div>
+  </div>
+</div>
+</div>
+
+
+
+
+
+
+
+
 <!-- ══════════════════════ CHESS64 3D PAGE ══════════════════════ -->
 <div class="page" id="page-chess3d">
 <div class="container" style="max-width:900px;margin:0 auto">
@@ -27637,7 +27876,7 @@ window.cityDashInit=function(){
     <div class="card" style="padding:28px;margin-bottom:20px;text-align:center;background:linear-gradient(135deg,rgba(59,130,246,.15),rgba(139,92,246,.1));border:1px solid rgba(59,130,246,.2)">
       <div style="font-size:56px;margin-bottom:12px">♟</div>
       <h2 style="margin:0 0 12px;font-size:24px">Chess64's Premium 3D Chess Set</h2>
-      <p style="color:var(--text2);font-size:14px;line-height:1.7;max-width:600px;margin:0 auto 20px">Enjoy Chess64's meticulously crafted 3D chess experience. Every piece was designed to feel satisfying — the perfect glare catches the board's surface as you rotate the camera, and the subtle <em>click</em> of a piece landing on the board is engineered to feel deliberate and precise. The board itself has a premium depth to it: rich textures, soft ambient lighting, and the kind of weight you'd expect from an over-the-board set. This isn't just chess — it's chess that feels good.</p>
+      <p style="color:var(--text2);font-size:14px;line-height:1.7;max-width:600px;margin:0 auto 20px">Enjoy Chess64's meticulously crafted 3D chess experience. Every piece was designed to feel satisfying — the perfect glare catches the board's surface as you rotate the camera, and the subtle <em>click</em> of a piece landing on the board is engineered to feel deliberate and precise. Rich textures, soft ambient lighting, and the kind of weight you'd expect from an over-the-board set. This isn't just chess — it's chess that feels good.</p>
       <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
         <button class="btn btn-primary btn-lg" onclick="chess3dShowGame()">▶ Play Chess64 3D</button>
         <button class="btn btn-ghost btn-lg" onclick="navTo('play')">♟ Play vs Bot (2D)</button>
@@ -27645,8 +27884,8 @@ window.cityDashInit=function(){
       <p style="font-size:11px;color:var(--text2);margin:14px 0 0;opacity:.7">🖱 Drag to rotate · Scroll to zoom · Click piece then square to move</p>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px">
-      <div class="card" style="padding:18px"><div style="font-size:28px;margin-bottom:8px">✨</div><h3 style="margin:0 0 6px">Premium Glare</h3><p style="color:var(--text2);font-size:13px;margin:0">Specular highlights react to lighting as you rotate, giving the board a satisfying sheen.</p></div>
-      <div class="card" style="padding:18px"><div style="font-size:28px;margin-bottom:8px">🔊</div><h3 style="margin:0 0 6px">Piece Sound Design</h3><p style="color:var(--text2);font-size:13px;margin:0">A satisfying thunk crafted to feel weighted and deliberate — like a real wooden set.</p></div>
+      <div class="card" style="padding:18px"><div style="font-size:28px;margin-bottom:8px">✨</div><h3 style="margin:0 0 6px">Premium Glare</h3><p style="color:var(--text2);font-size:13px;margin:0">Specular highlights react to lighting as you rotate.</p></div>
+      <div class="card" style="padding:18px"><div style="font-size:28px;margin-bottom:8px">🔊</div><h3 style="margin:0 0 6px">Piece Sound Design</h3><p style="color:var(--text2);font-size:13px;margin:0">A satisfying thunk crafted to feel weighted and deliberate.</p></div>
       <div class="card" style="padding:18px"><div style="font-size:28px;margin-bottom:8px">🎥</div><h3 style="margin:0 0 6px">Free Camera</h3><p style="color:var(--text2);font-size:13px;margin:0">Orbit freely. Multiple boards, piece styles, glare colors, and backgrounds.</p></div>
     </div>
   </div>
@@ -27665,7 +27904,7 @@ window.cityDashInit=function(){
       </div>
       <div id="c3d-root" style="flex:1;min-width:0;height:78vh;background:#080812;border-radius:12px;overflow:hidden;position:relative;min-height:420px">
         <div id="c3d-board2d-wrap" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;background:#0a0a14;z-index:5">
-          <div id="c3d-board2d" style="display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);width:min(90vw,90%,500px);height:min(80vh,500px);aspect-ratio:1;border-radius:6px;overflow:hidden;box-shadow:0 0 40px rgba(0,0,0,.8);flex-shrink:0"></div>
+          <div id="c3d-board2d" style="display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);width:min(90%,500px);height:min(80vh,500px);border-radius:6px;overflow:hidden;box-shadow:0 0 40px rgba(0,0,0,.8)"></div>
         </div>
         <div id="c3d-bm-wrap" style="position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:10;background:rgba(0,0,10,.82);backdrop-filter:blur(12px);border:1px solid rgba(59,130,246,.25);border-radius:10px;padding:6px 14px;text-align:center;pointer-events:none">
           <div style="font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#60a5fa;margin-bottom:2px">Best Move</div>
@@ -27673,7 +27912,7 @@ window.cityDashInit=function(){
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">
-        <button id="c3d-btn-hide-panel" class="btn btn-ghost btn-sm" style="writing-mode:vertical-rl;height:80px;padding:8px 4px">◀ Hide Panel</button>
+        <button id="c3d-btn-hide-panel" class="btn btn-ghost btn-sm" style="writing-mode:vertical-rl;height:80px;padding:8px 4px">◀ Hide</button>
       </div>
       <div id="c3d-sidebar" style="width:215px;flex-shrink:0;display:flex;flex-direction:column;gap:8px">
         <div style="display:flex;flex-wrap:wrap;gap:5px">
@@ -27685,7 +27924,7 @@ window.cityDashInit=function(){
           <div><label style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;display:block;margin-bottom:3px">Game Mode</label>
           <select id="c3d-mode" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:5px;font-size:11px;outline:none">
             <option value="analyze">Free Analysis</option><option value="play">Vs Computer</option>
-            <option value="comp-vs-comp">Engine vs Engine</option><option value="friend">Vs Friend (same device)</option>
+            <option value="comp-vs-comp">Engine vs Engine</option><option value="friend">Vs Friend</option>
           </select></div>
           <div id="c3d-engine-row" style="display:none;flex-direction:column;gap:6px">
             <div id="c3d-white-engine-row" style="display:none;flex-direction:column;gap:4px;padding:6px;background:rgba(59,130,246,.1);border-radius:6px;border:1px solid rgba(59,130,246,.2)">
@@ -27707,29 +27946,21 @@ window.cityDashInit=function(){
             <select id="c3d-side" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:5px;font-size:11px;outline:none">
               <option value="w">White</option><option value="b">Black</option></select></div>
           </div>
-          <div id="c3d-friend-row" style="display:none"><label style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;display:block;margin-bottom:3px">Auto-rotate each move</label>
+          <div id="c3d-friend-row" style="display:none"><label style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;display:block;margin-bottom:3px">Auto-rotate</label>
           <select id="c3d-autorotate" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:5px;font-size:11px;outline:none">
             <option value="true">Enabled</option><option value="false">Disabled</option></select></div>
           <div><label style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;display:block;margin-bottom:3px">Board Theme</label>
           <select id="c3d-board" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:5px;font-size:11px;outline:none">
-            <option value="midnight">Obsidian</option><option value="wood">Walnut</option>
-            <option value="marble">Emerald</option><option value="cyber">Cyberpunk</option>
-            <option value="royal">Royal Gold</option><option value="ice">Arctic</option></select></div>
+            <option value="midnight">Obsidian</option><option value="wood">Walnut</option><option value="marble">Emerald</option><option value="cyber">Cyberpunk</option><option value="royal">Royal Gold</option><option value="ice">Arctic</option></select></div>
           <div><label style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;display:block;margin-bottom:3px">Piece Style</label>
           <select id="c3d-piece" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:5px;font-size:11px;outline:none">
-            <option value="classic">Classic (Matte)</option><option value="metallic">Metallic</option>
-            <option value="glass">Crystal Glass</option><option value="neon">Neon Glow</option>
-            <option value="gold">Luxury Gold</option></select></div>
+            <option value="classic">Classic (Matte)</option><option value="metallic">Metallic</option><option value="glass">Crystal Glass</option><option value="neon">Neon Glow</option><option value="gold">Luxury Gold</option></select></div>
           <div><label style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;display:block;margin-bottom:3px">Background</label>
           <select id="c3d-bg" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:5px;font-size:11px;outline:none">
-            <option value="dark">Dark Space</option><option value="midnight">Midnight</option>
-            <option value="forest">Forest</option><option value="crimson">Deep Red</option>
-            <option value="void">Pure Black</option></select></div>
+            <option value="dark">Dark Space</option><option value="midnight">Midnight</option><option value="forest">Forest</option><option value="crimson">Deep Red</option><option value="void">Pure Black</option></select></div>
           <div><label style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;display:block;margin-bottom:3px">Glare Color</label>
           <select id="c3d-glare" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:5px;font-size:11px;outline:none">
-            <option value="blue">Electric Blue</option><option value="red">Ruby Red</option>
-            <option value="green">Acid Green</option><option value="gold">Solar Gold</option>
-            <option value="off">Disabled</option></select></div>
+            <option value="blue">Electric Blue</option><option value="red">Ruby Red</option><option value="green">Acid Green</option><option value="gold">Solar Gold</option><option value="off">Disabled</option></select></div>
           <div><label style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;display:block;margin-bottom:3px">View</label>
           <select id="c3d-view" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:6px;padding:5px;font-size:11px;outline:none">
             <option value="3d">3D Board</option><option value="2d">2D Board</option></select></div>
@@ -27748,1031 +27979,545 @@ window.cityDashInit=function(){
           <button id="c3d-btn-reset" class="btn btn-ghost btn-sm" style="flex:1">↺ Reset</button>
           <button id="c3d-btn-flip" class="btn btn-ghost btn-sm" style="flex:1">⇄ Flip</button>
           <button id="c3d-btn-recenter" class="btn btn-ghost btn-sm" style="flex:1">⌖ Center</button>
+          <button id="c3d-btn-freeze" class="btn btn-ghost btn-sm" style="flex:1">🔒 Freeze Cam</button>
           <button id="c3d-btn-pgn" class="btn btn-ghost btn-sm" style="flex:1">Copy PGN</button>
           <button id="c3d-btn-movelist" class="btn btn-ghost btn-sm" style="flex:1">Hide Moves</button>
-          <button id="c3d-btn-freeze" class="btn btn-ghost btn-sm" style="width:100%">🔒 Freeze Cam</button>
         </div>
-        <!-- Move list -->
         <div id="c3d-movelist-wrap" style="background:rgba(10,10,20,.92);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px;max-height:120px;overflow-y:auto">
           <div style="font-size:9px;font-weight:900;opacity:.5;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Move List</div>
           <div id="c3d-move-list" style="line-height:1.8;word-break:break-all"><span style="color:rgba(255,255,255,.3);font-size:11px">No moves yet</span></div>
         </div>
-      </div><!-- /c3d-sidebar -->
+      </div>
     </div>
   </div>
 </div>
 </div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script id="chess3d-game-script">
-// ═══════════════════════════════════════════════════════════════════
-// Chess64 3D — Built from scratch
-// ═══════════════════════════════════════════════════════════════════
-(function(){
-'use strict';
 
-// ── State ──────────────────────────────────────────────────────────
-const Chess3D = {
-  scene:null, camera:null, renderer:null, raycaster:null, mouse:new THREE.Vector2(),
-  game:null, stockfish:null, engineReady:false,
-  pieces:{}, boardGroup:new THREE.Group(), rimLight:null,
-  theta:Math.PI/2, phi:Math.PI/3.5, radius:14,
-  tTheta:Math.PI/2, tPhi:Math.PI/3.5,
-  isDragging:false, dragMoved:false, startMouse:{x:0,y:0}, prevMouse:{x:0,y:0},
-  pinchDist:0,
-  selectedSq:null, mode:'analyze', userColor:'w',
-  bestMoveEnabled:true, evalVisible:true, uiVisible:true, soundEnabled:true,
-  animEnabled:true, autoRotate:false,
-  boardTheme:'midnight', pieceStyle:'classic', bgStyle:'dark',
-  matType:'plastic',
-  glareColor:'blue', glareColors:{blue:0x3b82f6,red:0xef4444,green:0x22c55e,gold:0xf59e0b,off:null},
-  started:false, animating:{},
-  showCoords:false,
-  cameraFrozen:false
+
+<script id="book-reviews-script">
+/* Book Reviews — full standalone script */
+var _brAllReviews=[], _brHtmlMode=false;
+
+window.brInit=function(){
+  var canWrite=window._fb&&window._fb.user&&(window._fb.isAdmin||window._fb.blogger);
+  var w=document.getElementById('br-write-btn-wrap');
+  var d=document.getElementById('br-drafts-btn-wrap');
+  var a=document.getElementById('br-apply-blogger-btn');
+  if(w)w.style.display=canWrite?'block':'none';
+  if(d)d.style.display=canWrite?'block':'none';
+  if(a)a.style.display=(!canWrite&&window._fb&&window._fb.user)?'block':'none';
+  window.brLoadList(false);
 };
 
-// Audio
-const AudioCtx={ctx:null};
-function playThunk(){
-  if(!Chess3D.soundEnabled) return;
+window.brLoadList=async function(includeAll){
+  var el=document.getElementById('br-list');
+  var empty=document.getElementById('br-empty');
+  if(el)el.innerHTML='<div class="spinner" style="margin:20px auto;display:block"></div>';
   try{
-    if(!AudioCtx.ctx) AudioCtx.ctx=new(window.AudioContext||window.webkitAudioContext)();
-    const ctx=AudioCtx.ctx; if(ctx.state==='suspended') ctx.resume();
-    const buf=ctx.createBuffer(1,ctx.sampleRate*0.12,ctx.sampleRate);
-    const d=buf.getChannelData(0);
-    for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.exp(-i/(ctx.sampleRate*0.04));
-    const src=ctx.createBufferSource(); src.buffer=buf;
-    const gain=ctx.createGain(); gain.gain.setValueAtTime(0.25,ctx.currentTime);
-    const filt=ctx.createBiquadFilter(); filt.type='bandpass'; filt.frequency.value=320;
-    src.connect(filt); filt.connect(gain); gain.connect(ctx.destination); src.start();
-  }catch(e){}
-}
-
-// Board themes
-const THEMES={
-  midnight:{light:0x3a3a4a,dark:0x1a1a2a,trim:0x0a0a15,label:'Obsidian'},
-  wood:{light:0xeedcb3,dark:0x7a503a,trim:0x4a2e1f,label:'Walnut'},
-  marble:{light:0xfafafa,dark:0x22c55e,trim:0x166534,label:'Emerald'},
-  cyber:{light:0x00f3ff,dark:0x001a1a,trim:0x000000,label:'Cyberpunk'},
-  royal:{light:0xd4af37,dark:0x2d1b69,trim:0x1a0f3d,label:'Royal'},
-  ice:{light:0xe0f2fe,dark:0x0369a1,trim:0x082f49,label:'Arctic'}
-};
-
-// Piece configs
-const PIECE_STYLES={
-  classic:{label:'Classic',roughness:0.6,metalness:0},
-  metallic:{label:'Metallic',roughness:0.15,metalness:0.9},
-  glass:{label:'Crystal',roughness:0.05,metalness:0},
-  neon:{label:'Neon',emissive:true},
-  gold:{label:'Gold',color:0xffd700,roughness:0.1,metalness:1}
-};
-
-const BACKGROUNDS={
-  dark:{label:'Dark Space',color:0x080812},
-  midnight:{label:'Midnight',color:0x0a0a1a},
-  forest:{label:'Forest',color:0x0a1a0a},
-  crimson:{label:'Deep Red',color:0x1a0808},
-  void:{label:'Void',color:0x000000}
-};
-
-// Bot styles
-const BOT_STYLES=[
-  {id:'balanced',label:'Balanced',contempt:0,desc:'Plays principled chess'},
-  {id:'aggressive',label:'Aggressive',contempt:80,desc:'Attacks and sacrifices'},
-  {id:'positional',label:'Positional',contempt:-20,desc:'Slow squeezing style'},
-  {id:'tal',label:'Tal Inspired',contempt:120,desc:'Wild tactical complications'},
-  {id:'defensive',label:'Defensive',contempt:-60,desc:'Solid and reactive'},
-  {id:'gambit',label:'Gambiteer',contempt:50,desc:'Sacrifices for initiative'},
-  {id:'boring',label:'Boring',contempt:-100,desc:'Grinds endgames'},
-  {id:'explosive',label:'Explosive',contempt:150,desc:'Maximum chaos'}
-];
-
-// ELO levels
-const ELO={1:400,2:600,3:800,4:950,5:1100,6:1250,7:1400,8:1550,9:1700,10:1850,
-           11:2000,12:2100,13:2200,14:2300,15:2400,16:2500,17:2600,18:2700,19:2800,20:3300};
-
-// Piece images
-const PI={
-  w:{p:'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg',
-     r:'https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg',
-     n:'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg',
-     b:'https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg',
-     q:'https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg',
-     k:'https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg'},
-  b:{p:'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg',
-     r:'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg',
-     n:'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg',
-     b:'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg',
-     q:'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg',
-     k:'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg'}
-};
-
-// ── Init ────────────────────────────────────────────────────────────
-function init(){
-  Chess3D.game = new Chess();
-  const root = document.getElementById('c3d-root');
-  if(!root) return;
-
-  // Scene
-  Chess3D.scene = new THREE.Scene();
-  setBg();
-
-  // Camera
-  Chess3D.camera = new THREE.PerspectiveCamera(42, root.clientWidth/root.clientHeight, 0.1, 1000);
-  updateCamera();
-
-  // Renderer
-  Chess3D.renderer = new THREE.WebGLRenderer({antialias:true, alpha:false});
-  Chess3D.renderer.setSize(root.clientWidth, root.clientHeight);
-  Chess3D.renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
-  Chess3D.renderer.shadowMap.enabled = true;
-  Chess3D.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  Chess3D.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  Chess3D.renderer.toneMappingExposure = 1.1;
-  root.appendChild(Chess3D.renderer.domElement);
-
-  // Raycaster
-  Chess3D.raycaster = new THREE.Raycaster();
-
-  // Lights
-  setupLights();
-
-  // Board + pieces
-  buildBoard();
-  syncPieces();
-
-  // Interaction
-  setupInteraction(root);
-
-  // Animate
-  animate();
-
-  // Engine
-  initEngine();
-
-  // Wire UI
-  wireUI();
-}
-
-function setBg(){
-  const bg=BACKGROUNDS[Chess3D.bgStyle]||BACKGROUNDS.dark;
-  Chess3D.scene.background = new THREE.Color(bg.color);
-  Chess3D.scene.fog = new THREE.FogExp2(bg.color, 0.018);
-}
-
-function setupLights(){
-  const s=Chess3D.scene;
-  s.add(new THREE.AmbientLight(0xffffff, 0.45));
-  const sun=new THREE.DirectionalLight(0xffffff,0.9);
-  sun.position.set(8,16,8); sun.castShadow=true;
-  sun.shadow.mapSize.width=2048; sun.shadow.mapSize.height=2048;
-  sun.shadow.camera.near=0.1; sun.shadow.camera.far=60;
-  sun.shadow.camera.left=-12; sun.shadow.camera.right=12;
-  sun.shadow.camera.top=12; sun.shadow.camera.bottom=-12;
-  sun.shadow.bias=-0.001;
-  s.add(sun);
-
-  const fill=new THREE.DirectionalLight(0x8888ff,0.3);
-  fill.position.set(-8,6,-8); s.add(fill);
-
-  Chess3D.rimLight=new THREE.PointLight(0x3b82f6,2.2,35);
-  Chess3D.rimLight.position.set(-10,9,-10);
-  s.add(Chess3D.rimLight);
-
-  updateGlare();
-}
-
-// ── Board building ─────────────────────────────────────────────────
-function buildBoard(){
-  const s=Chess3D.scene;
-  if(Chess3D.boardGroup.parent) s.remove(Chess3D.boardGroup);
-  Chess3D.boardGroup = new THREE.Group();
-  const theme=THEMES[Chess3D.boardTheme]||THEMES.midnight;
-
-  // Frame
-  const frameGeo=new THREE.BoxGeometry(9.4,0.18,9.4);
-  const frameMat=new THREE.MeshStandardMaterial({color:theme.trim,roughness:0.3,metalness:0.4});
-  const frame=new THREE.Mesh(frameGeo,frameMat);
-  frame.position.y=-0.08; frame.receiveShadow=true;
-  Chess3D.boardGroup.add(frame);
-
-  // Squares
-  const sqGeo=new THREE.BoxGeometry(1,0.12,1);
-  for(let r=0;r<8;r++){
-    for(let cc=0;cc<8;cc++){
-      const isLight=(r+cc)%2===0;
-      const col=isLight?theme.light:theme.dark;
-      const mat=new THREE.MeshStandardMaterial({color:col,roughness:0.35,metalness:0.05});
-      const sq=new THREE.Mesh(sqGeo,mat);
-      sq.position.set(cc-3.5,0,r-3.5);
-      sq.receiveShadow=true;
-      sq.userData.sq=String.fromCharCode(97+cc)+(8-r);
-      sq.userData.origColor=col;
-      Chess3D.boardGroup.add(sq);
+    var url='https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/bookreviews?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&pageSize=40';
+    var r=await fetch(url);
+    var data=await r.json();
+    _brAllReviews=[];
+    if(data.documents){
+      _brAllReviews=data.documents.map(function(d){
+        var f=d.fields||{};
+        return {id:d.name.split('/').pop(),
+          title:(f.title&&f.title.stringValue)||'Untitled',
+          bookTitle:(f.bookTitle&&f.bookTitle.stringValue)||'',
+          author:(f.authorName&&f.authorName.stringValue)||'Anonymous',
+          rating:parseInt((f.rating&&f.rating.integerValue)||5),
+          coverImage:(f.coverImage&&f.coverImage.stringValue)||'',
+          content:(f.content&&f.content.stringValue)||'',
+          isDraft:(f.isDraft&&f.isDraft.booleanValue)||false,
+          authorId:(f.authorId&&f.authorId.stringValue)||''};
+      }).filter(function(r){return includeAll||!r.isDraft;});
     }
-  }
+    window.brRenderList(_brAllReviews);
+  }catch(e){if(el)el.innerHTML='<p style="color:var(--text2)">Could not load reviews.</p>';}
+};
 
-  // Coord labels
-  const ctx2=document.createElement('canvas'); ctx2.width=512; ctx2.height=512;
-  const cx=ctx2.getContext('2d');
-  cx.fillStyle='rgba(255,255,255,0.0)'; cx.fillRect(0,0,512,512);
-  cx.font='bold 36px Arial'; cx.fillStyle='rgba(255,255,255,0.55)';
-  ['a','b','c','d','e','f','g','h'].forEach((l,i)=>{ cx.fillText(l,i*64+24,500); });
-  ['1','2','3','4','5','6','7','8'].forEach((l,i)=>{ cx.fillText(l,4,(7-i)*64+44); });
-  const labelTex=new THREE.CanvasTexture(ctx2);
-  const labelMesh=new THREE.Mesh(new THREE.PlaneGeometry(8,8),
-    new THREE.MeshBasicMaterial({map:labelTex,transparent:true,opacity:0.7}));
-  labelMesh.rotation.x=-Math.PI/2; labelMesh.position.y=0.07;
-  Chess3D.boardGroup.add(labelMesh);
+window.brRenderList=function(reviews,isDrafts){
+  var el=document.getElementById('br-list');
+  var empty=document.getElementById('br-empty');
+  if(!el)return;
+  var shown=reviews.filter(function(r){return isDrafts||!r.isDraft;});
+  if(!shown.length){el.innerHTML='';if(empty)empty.style.display='block';return;}
+  if(empty)empty.style.display='none';
+  el.innerHTML=shown.map(function(r){
+    var thumb=r.coverImage?('<img src="'+r.coverImage+'" style="width:100%;height:140px;object-fit:cover;border-radius:8px 8px 0 0;display:block">'):'<div style="height:80px;background:linear-gradient(135deg,var(--accent),#7c3aed);display:flex;align-items:center;justify-content:center;font-size:36px;border-radius:8px 8px 0 0">&#128218;</div>';
+    return '<div class="card" style="cursor:pointer;padding:0;overflow:hidden;border-radius:10px" onclick="brOpenReader(\''+r.id+'\')">'+thumb+'<div style="padding:14px"><div style="font-size:11px;color:#fbbf24;margin-bottom:4px">'+'&#11088;'.repeat(Math.max(1,Math.min(5,r.rating)))+' '+r.rating+'/5</div><div style="font-weight:700;font-size:15px;margin-bottom:2px;color:var(--text)">'+r.title+'</div>'+(r.bookTitle?'<div style="font-size:11px;color:var(--text2);margin-bottom:6px">&#128218; '+r.bookTitle+'</div>':'')+'<div style="font-size:11px;color:var(--text2)">By '+r.author+'</div></div></div>';
+  }).join('');
+};
 
-  s.add(Chess3D.boardGroup);
-  // Apply coord visibility immediately (default = off)
-  setCoordVis(Chess3D.showCoords);
-}
+window.brFilterList=function(){
+  var q=(document.getElementById('br-search').value||'').toLowerCase();
+  window.brRenderList(_brAllReviews.filter(function(r){return !q||(r.title+r.bookTitle+r.author).toLowerCase().includes(q);}));
+};
 
-// ── Piece meshes ───────────────────────────────────────────────────
-function getMat(isWhite){
-  const style=PIECE_STYLES[Chess3D.pieceStyle]||PIECE_STYLES.classic;
-  const baseColor=isWhite?0xeeeeee:0x111111;
-  if(Chess3D.pieceStyle==='glass'){
-    return new THREE.MeshPhysicalMaterial({color:isWhite?0xddeeff:0x112233,
-      transmission:0.92,roughness:0.04,thickness:1.2,envMapIntensity:0.8});
-  }
-  if(Chess3D.pieceStyle==='neon'){
-    const nc=isWhite?0x00f3ff:0xff00ff;
-    return new THREE.MeshStandardMaterial({color:nc,emissive:nc,emissiveIntensity:0.7,roughness:0.3});
-  }
-  if(Chess3D.pieceStyle==='gold'){
-    return new THREE.MeshStandardMaterial({color:0xffd700,roughness:0.1,metalness:1});
-  }
-  return new THREE.MeshStandardMaterial({color:baseColor,roughness:style.roughness||0.6,metalness:style.metalness||0});
-}
-
-function makePiece(type,color){
-  const g=new THREE.Group();
-  const isW=color==='w';
-  const mat=getMat(isW);
-  const add=(geo,y,m)=>{const mesh=new THREE.Mesh(geo,m||mat);mesh.position.y=y;mesh.castShadow=true;mesh.receiveShadow=true;g.add(mesh);return mesh;};
-
-  // Base
-  add(new THREE.CylinderGeometry(0.40,0.46,0.14,24),0.07);
-  add(new THREE.CylinderGeometry(0.34,0.40,0.10,24),0.19);
-
-  switch(type){
-    case 'p':
-      add(new THREE.CylinderGeometry(0.14,0.30,0.58,16),0.43);
-      add(new THREE.SphereGeometry(0.20,16,16),0.82); break;
-    case 'r':
-      add(new THREE.CylinderGeometry(0.26,0.32,0.78,16),0.47);
-      add(new THREE.CylinderGeometry(0.30,0.30,0.22,8),0.97);
-      // Battlements
-      for(let i=0;i<4;i++){
-        const bb=add(new THREE.BoxGeometry(0.12,0.18,0.12),1.12);
-        bb.position.x=Math.cos(i*Math.PI/2)*0.22;
-        bb.position.z=Math.sin(i*Math.PI/2)*0.22;
-      }
-      break;
-    case 'n':
-      add(new THREE.CylinderGeometry(0.22,0.30,0.40,16),0.34);
-      const nh=add(new THREE.BoxGeometry(0.26,0.52,0.36),0.72);
-      nh.rotation.x=0.35;
-      const nhead=add(new THREE.BoxGeometry(0.22,0.28,0.46),1.02);
-      nhead.rotation.x=-0.2;
-      break;
-    case 'b':
-      add(new THREE.CylinderGeometry(0.14,0.28,0.88,16),0.54);
-      const bh=add(new THREE.SphereGeometry(0.20,16,16),1.06); bh.scale.y=1.25;
-      add(new THREE.SphereGeometry(0.07,8,8),1.38);
-      break;
-    case 'q':
-      add(new THREE.CylinderGeometry(0.18,0.32,1.12,20),0.70);
-      add(new THREE.SphereGeometry(0.26,16,16),1.38);
-      // Crown points
-      for(let i=0;i<5;i++){
-        const qp=add(new THREE.SphereGeometry(0.07,8,8),1.62);
-        qp.position.x=Math.cos(i*2*Math.PI/5)*0.20;
-        qp.position.z=Math.sin(i*2*Math.PI/5)*0.20;
-      }
-      break;
-    case 'k':
-      add(new THREE.CylinderGeometry(0.20,0.34,1.26,20),0.77);
-      add(new THREE.CylinderGeometry(0.22,0.22,0.14,20),1.47);
-      add(new THREE.BoxGeometry(0.10,0.38,0.10),1.68);
-      add(new THREE.BoxGeometry(0.28,0.10,0.10),1.64);
-      break;
-  }
-  return g;
-}
-
-// ── Piece sync ─────────────────────────────────────────────────────
-function syncPieces(animate){
-  const board=Chess3D.game.board();
-  const active={};
-  for(let r=0;r<8;r++)
-    for(let cc=0;cc<8;cc++)
-      if(board[r][cc]) active[String.fromCharCode(97+cc)+(8-r)]=board[r][cc];
-
-  // Remove dead pieces (but not animating ones)
-  Object.keys(Chess3D.pieces).forEach(sq=>{
-    const p=Chess3D.pieces[sq];
-    if(!Chess3D.animating[sq]){
-      if(!active[sq]||active[sq].type!==p.type||active[sq].color!==p.color){
-        Chess3D.scene.remove(p.mesh);
-        delete Chess3D.pieces[sq];
-      }
-    }
-  });
-
-  // Add new pieces
-  Object.keys(active).forEach(sq=>{
-    if(!Chess3D.pieces[sq]){
-      const info=active[sq];
-      const mesh=makePiece(info.type,info.color);
-      const [cc,r]=[sq.charCodeAt(0)-97, 8-parseInt(sq[1])];
-      mesh.position.set(cc-3.5,0.12,r-3.5);
-      Chess3D.scene.add(mesh);
-      Chess3D.pieces[sq]={type:info.type,color:info.color,mesh};
-    }
-  });
-
-  // Highlight
-  Chess3D.boardGroup.children.forEach(m=>{
-    if(!m.userData.sq) return;
-    const isSelected=m.userData.sq===Chess3D.selectedSq;
-    m.material.emissive=new THREE.Color(isSelected?0x3b82f6:0x000000);
-    m.material.emissiveIntensity=isSelected?0.5:0;
-  });
-
-  update2D();
-  updateMoveList();
-  if(Chess3D.engineReady) sendToEngine();
-}
-
-function animateMove(fromSq,toSq,cb){
-  // fromSq is where piece WAS (key now deleted from Chess3D.pieces)
-  // But we look up by toSq since the move already happened
-  const p=Chess3D.pieces[toSq];
-  if(!p||!Chess3D.animEnabled){if(cb)cb();return;}
-  const [fc,fr]=[fromSq.charCodeAt(0)-97, 8-parseInt(fromSq[1])];
-  const [tc,tr]=[toSq.charCodeAt(0)-97, 8-parseInt(toSq[1])];
-  const start=new THREE.Vector3(fc-3.5,0.12,fr-3.5);
-  const end=new THREE.Vector3(tc-3.5,0.12,tr-3.5);
-  // Start piece at original position
-  p.mesh.position.copy(start);
-  const t0=performance.now(), dur=380;
-  Chess3D.animating[toSq]=true;
-  function step(){
-    const prog=Math.min((performance.now()-t0)/dur,1);
-    const ease=1-Math.pow(1-prog,3);
-    p.mesh.position.lerpVectors(start,end,ease);
-    p.mesh.position.y=0.12+Math.sin(prog*Math.PI)*0.65;
-    if(prog<1){requestAnimationFrame(step);}
+window.brOpenReader=async function(id){
+  var rev=_brAllReviews.find(function(r){return r.id===id;});
+  var readerEl=document.getElementById('br-reader');
+  var listEl=document.getElementById('br-list');
+  var searchEl=document.getElementById('br-search');
+  var emptyEl=document.getElementById('br-empty');
+  if(!readerEl)return;
+  if(listEl)listEl.style.display='none';
+  if(searchEl)searchEl.style.display='none';
+  if(emptyEl)emptyEl.style.display='none';
+  var commHtml='<p style="color:var(--text2);font-size:13px">Loading comments...</p>';
+  try{
+    var curl='https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/bookreviews/'+id+'/comments?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&pageSize=50';
+    var cr=await fetch(curl);
+    var cdata=await cr.json();
+    if(!cdata.documents||!cdata.documents.length){commHtml='<p style="color:var(--text2);font-size:13px">No comments yet.</p>';}
     else{
-      delete Chess3D.animating[toSq];
-      p.mesh.position.copy(end);
-      playThunk();
-      if(cb)cb();
+      commHtml=cdata.documents.map(function(d){
+        var f=d.fields||{};
+        var cid=d.name.split('/').pop();
+        var txt=(f.text&&f.text.stringValue)||'';
+        var auth=(f.authorName&&f.authorName.stringValue)||'Anonymous';
+        var isAdmin=window._fb&&window._fb.isAdmin;
+        var isMine=window._fb&&window._fb.user&&(f.authorId&&f.authorId.stringValue)===window._fb.user.uid;
+        var delBtn=(isAdmin||isMine)?('<button onclick="brDeleteComment(\''+id+'\',\''+cid+'\')" style="background:transparent;border:none;color:#ef4444;cursor:pointer;font-size:12px">&#10005;</button>'):'';
+        return '<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:10px;background:var(--bg3);border-radius:8px;margin-bottom:8px"><div><div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:2px">'+auth+'</div><div style="font-size:13px;color:var(--text)">'+txt+'</div></div>'+delBtn+'</div>';
+      }).join('');
     }
-  }
-  requestAnimationFrame(step);
-}
-
-// ── Moves ─────────────────────────────────────────────────────────
-function doMove(moveObj){
-  const from=typeof moveObj==='string'?moveObj.slice(0,2):moveObj.from;
-  const to=typeof moveObj==='string'?moveObj.slice(2,4):moveObj.to;
-  const promo=typeof moveObj==='string'?(moveObj[4]||'q'):'q';
-
-  // Remove captured piece
-  if(Chess3D.pieces[to]){Chess3D.scene.remove(Chess3D.pieces[to].mesh);delete Chess3D.pieces[to];}
-
-  const movingPiece=Chess3D.pieces[from];
-  const mv=Chess3D.game.move({from,to,promotion:promo});
-  if(!mv) return false;
-
-  if(movingPiece){
-    Chess3D.pieces[to]=movingPiece;
-    delete Chess3D.pieces[from];
-    if(Chess3D.animEnabled){
-      // Smooth animation: piece is already at FROM position, animate to TO
-      animateMove(from,to,()=>{syncPieces();});
-    } else {
-      // No animation: instantly place at destination, no disappear
-      const [tc2,tr2]=[to.charCodeAt(0)-97, 8-parseInt(to[1])];
-      movingPiece.mesh.position.set(tc2-3.5,0.12,tr2-3.5);
-      playThunk();
-      syncPieces();
-    }
-  }
-
-  // Auto-rotate for vs friend
-  if(Chess3D.mode==='friend'&&Chess3D.autoRotate){
-    Chess3D.tTheta+=Math.PI;
-  }
-
-  Chess3D.selectedSq=null;
-  syncPieces();
-  playThunk();
-  return true;
-}
-
-function handleSqClick(sq){
-  const g=Chess3D.game;
-  if(Chess3D.mode==='play'&&g.turn()!==Chess3D.userColor) return;
-  if(Chess3D.mode==='comp-vs-comp') return;
-
-  if(Chess3D.selectedSq){
-    if(Chess3D.selectedSq===sq){Chess3D.selectedSq=null;syncPieces();return;}
-    const ok=doMove({from:Chess3D.selectedSq,to:sq,promotion:'q'});
-    if(!ok){
-      const p=g.get(sq);
-      Chess3D.selectedSq=(p&&(Chess3D.mode==='analyze'||p.color===g.turn()))?sq:null;
-    }
-  } else {
-    const p=g.get(sq);
-    if(p&&(Chess3D.mode==='analyze'||p.color===g.turn())) Chess3D.selectedSq=sq;
-  }
-  syncPieces();
-}
-
-// ── 2D board ───────────────────────────────────────────────────────
-function update2D(){
-  const el=document.getElementById('c3d-board2d');
-  if(!el) return;
-  const theme=THEMES[Chess3D.boardTheme]||THEMES.midnight;
-  const hex=n=>'#'+n.toString(16).padStart(6,'0');
-  // Only rebuild if empty (avoid reshape on every sync)
-  if(el.children.length!==64){
-    el.innerHTML='';
-    for(let i=0;i<64;i++){
-      const div=document.createElement('div');
-      div.setAttribute('data-i',i);
-      div.style.cssText='display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;aspect-ratio:1;';
-      div.innerHTML='<img style="width:88%;height:88%;pointer-events:none;display:none;image-rendering:auto" />';
-      el.appendChild(div);
-    }
-  }
-  const divs=el.children;
-  for(let i=0;i<64;i++){
-    const r=7-Math.floor(i/8),cc=i%8;
-    const sq=String.fromCharCode(97+cc)+(r+1);
-    const piece=Chess3D.game.get(sq);
-    const isLight=(r+cc)%2===0;
-    const div=divs[i];
-    div.style.background=hex(isLight?theme.light:theme.dark);
-    div.style.boxShadow=sq===Chess3D.selectedSq?'inset 0 0 0 3px #3b82f6':'';
-    div.onclick=()=>handleSqClick(sq);
-    const img=div.querySelector('img');
-    if(piece){
-      const src=PI[piece.color][piece.type];
-      if(img.src!==src) img.src=src;
-      img.style.display='block';
-    } else {
-      img.style.display='none';
-    }
-  }
-}
-
-// ── Interaction ────────────────────────────────────────────────────
-function setupInteraction(root){
-  const el=Chess3D.renderer.domElement;
-
-  // Touch state: track start position for reliable tap detection
-  let _touchId=-1, _touchX0=0, _touchY0=0, _touchMoved=false;
-  let _mouseDown=false, _mouseMoved=false;
-
-  const onMouseDown=e=>{
-    _mouseDown=true; _mouseMoved=false;
-    Chess3D.startMouse={x:e.clientX,y:e.clientY};
-    Chess3D.prevMouse={x:e.clientX,y:e.clientY};
-    if(AudioCtx.ctx===null){try{AudioCtx.ctx=new(window.AudioContext||window.webkitAudioContext)();}catch(ex){}}
-  };
-  const onMouseMove=e=>{
-    if(!_mouseDown) return;
-    if(Math.abs(e.clientX-Chess3D.startMouse.x)>5||Math.abs(e.clientY-Chess3D.startMouse.y)>5) _mouseMoved=true;
-    Chess3D.tTheta-=(e.clientX-Chess3D.prevMouse.x)*0.007;
-    Chess3D.tPhi=Math.max(0.08,Math.min(Math.PI/2-0.05,Chess3D.tPhi+(e.clientY-Chess3D.prevMouse.y)*0.007));
-    Chess3D.prevMouse={x:e.clientX,y:e.clientY};
-  };
-  const onMouseUp=e=>{
-    if(_mouseDown&&!_mouseMoved){
-      const rc=Chess3D.renderer.domElement.getBoundingClientRect();
-      Chess3D.mouse.x=((e.clientX-rc.left)/rc.width)*2-1;
-      Chess3D.mouse.y=-((e.clientY-rc.top)/rc.height)*2+1;
-      Chess3D.raycaster.setFromCamera(Chess3D.mouse,Chess3D.camera);
-      doRaycast();
-    }
-    _mouseDown=false; _mouseMoved=false;
-  };
-
-  const onTouchStart=e=>{
-    if(AudioCtx.ctx===null){try{AudioCtx.ctx=new(window.AudioContext||window.webkitAudioContext)();}catch(ex){}}
-    if(e.touches.length===2){
-      Chess3D.pinchDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
-      _touchId=-1; return;
-    }
-    if(e.touches.length===1){
-      const t=e.touches[0];
-      _touchId=t.identifier; _touchX0=t.clientX; _touchY0=t.clientY; _touchMoved=false;
-      Chess3D.prevMouse={x:t.clientX,y:t.clientY};
-    }
-    e.preventDefault();
-  };
-  const onTouchMove=e=>{
-    if(e.touches.length===2){
-      const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
-      Chess3D.radius=Math.max(5,Math.min(28,Chess3D.radius-(d-Chess3D.pinchDist)*0.05));
-      Chess3D.pinchDist=d; e.preventDefault(); return;
-    }
-    const t=Array.from(e.changedTouches).find(t2=>t2.identifier===_touchId);
-    if(!t) return;
-    if(Math.abs(t.clientX-_touchX0)>22||Math.abs(t.clientY-_touchY0)>22) _touchMoved=true;
-    Chess3D.tTheta-=(t.clientX-Chess3D.prevMouse.x)*0.007;
-    Chess3D.tPhi=Math.max(0.08,Math.min(Math.PI/2-0.05,Chess3D.tPhi+(t.clientY-Chess3D.prevMouse.y)*0.007));
-    Chess3D.prevMouse={x:t.clientX,y:t.clientY};
-    e.preventDefault();
-  };
-  const onTouchEnd=e=>{
-    const t=Array.from(e.changedTouches).find(t2=>t2.identifier===_touchId);
-    if(!t){_touchId=-1;return;}
-    if(!_touchMoved){
-      const rc=Chess3D.renderer.domElement.getBoundingClientRect();
-      Chess3D.mouse.x=((t.clientX-rc.left)/rc.width)*2-1;
-      Chess3D.mouse.y=-((t.clientY-rc.top)/rc.height)*2+1;
-      Chess3D.raycaster.setFromCamera(Chess3D.mouse,Chess3D.camera);
-      doRaycast();
-    }
-    _touchId=-1; _touchMoved=false;
-  };
-  function doRaycast(){
-    const allObjs=[...Chess3D.boardGroup.children];
-    Object.values(Chess3D.pieces).forEach(piece=>{
-      if(piece.mesh) piece.mesh.children.forEach(ch=>allObjs.push(ch));
-    });
-    const hits=Chess3D.raycaster.intersectObjects(allObjs,true);
-    let hitSq=null;
-    for(const h of hits){
-      if(h.object.userData&&h.object.userData.sq){hitSq=h.object.userData.sq;break;}
-      for(const [sq,piece] of Object.entries(Chess3D.pieces)){
-        if(piece.mesh&&piece.mesh.children.includes(h.object)){hitSq=sq;break;}
-      }
-      if(hitSq) break;
-    }
-    if(hitSq) handleSqClick(hitSq);
-  }
-  // ── Register all events ──────────────────────────────────────────
-  el.addEventListener('mousedown', onMouseDown);
-  window.addEventListener('mousemove', onMouseMove);
-  window.addEventListener('mouseup', onMouseUp);
-  el.addEventListener('touchstart', onTouchStart, {passive:false});
-  el.addEventListener('touchmove',  onTouchMove,  {passive:false});
-  el.addEventListener('touchend',   onTouchEnd,   {passive:false});
-  window.addEventListener('touchend', onTouchEnd, {passive:false});
-  el.addEventListener('wheel', e=>{
-    Chess3D.radius=Math.max(5,Math.min(28,Chess3D.radius+e.deltaY*0.012));
-    e.preventDefault();
-  },{passive:false});
-  window.addEventListener('resize',()=>{
-    const r=document.getElementById('c3d-root');
-    if(!r||!Chess3D.renderer) return;
-    Chess3D.renderer.setSize(r.clientWidth,r.clientHeight);
-    Chess3D.camera.aspect=r.clientWidth/r.clientHeight;
-    Chess3D.camera.updateProjectionMatrix();
-  });
-}
-
-function updateCamera(){
-  if(Chess3D.cameraFrozen) return;
-  const {theta,phi,radius,camera}=Chess3D;
-  camera.position.set(radius*Math.sin(phi)*Math.cos(theta),radius*Math.cos(phi),radius*Math.sin(phi)*Math.sin(theta));
-  camera.lookAt(0,0,0);
-}
-
-function updateGlare(){
-  if(!Chess3D.rimLight) return;
-  const col=Chess3D.glareColors[Chess3D.glareColor];
-  if(col===null){Chess3D.rimLight.intensity=0;}
-  else{Chess3D.rimLight.color.set(col);Chess3D.rimLight.intensity=2.2;}
-}
-
-// ── Animate loop ───────────────────────────────────────────────────
-function animate(){
-  requestAnimationFrame(animate);
-  Chess3D.theta+=(Chess3D.tTheta-Chess3D.theta)*0.1;
-  Chess3D.phi+=(Chess3D.tPhi-Chess3D.phi)*0.1;
-  updateCamera();
-  Chess3D.renderer.render(Chess3D.scene,Chess3D.camera);
-}
-
-// ── Engine ─────────────────────────────────────────────────────────
-async function initEngine(){
-  try{
-    const r=await fetch('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');
-    const blob=new Blob([await r.text()],{type:'application/javascript'});
-    Chess3D.stockfish=new Worker(URL.createObjectURL(blob));
-    Chess3D.stockfish.onmessage=e=>{
-      const line=e.data;
-      if(line.startsWith('info depth')){
-        const sc=line.match(/score cp (-?\d+)/);
-        const sm=line.match(/score mate (-?\d+)/);
-        const pv=line.match(/pv ([a-h][1-8][a-h][1-8][qrbn]?)/);
-        if(sc){
-          let v=parseInt(sc[1])/100;
-          if(Chess3D.game.turn()==='b') v=-v;
-          updateEval(v);
-        } else if(sm) updateEval(parseInt(sm[1])>0?15:-15);
-        if(pv&&Chess3D.bestMoveEnabled){
-          const uci=pv[1];
-          const tmp=new Chess(Chess3D.game.fen());
-          const mv=tmp.move({from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]||'q'});
-          const san=mv?mv.san:uci;
-          const bmv=document.getElementById('c3d-best-val');
-          if(bmv) bmv.textContent=san;
-        }
-      }
-      if(line.startsWith('bestmove')){
-        const mv=line.split(' ')[1];
-        if(mv&&mv!=='(none)'){
-          const should=(Chess3D.mode==='play'&&Chess3D.game.turn()!==Chess3D.userColor)||Chess3D.mode==='comp-vs-comp';
-          if(should) setTimeout(()=>doMove(mv),500);
-        }
-      }
-    };
-    Chess3D.stockfish.postMessage('uci');
-    Chess3D.stockfish.postMessage('isready');
-    Chess3D.engineReady=true;
-    populateLevels();
-  }catch(e){console.log('Engine error',e);}
-}
-
-function populateLevels(){
-  ['c3d-level','c3d-level-w','c3d-level-b'].forEach(id=>{
-    const sel=document.getElementById(id);
-    if(!sel) return;
-    sel.innerHTML='';
-    for(let i=1;i<=20;i++){
-      const o=document.createElement('option');
-      o.value=i; o.textContent=`Lvl ${i} (~${ELO[i]})`;
-      if(i===5) o.selected=true;
-      sel.appendChild(o);
-    }
-  });
-}
-
-function sendToEngine(){
-  if(!Chess3D.engineReady||!Chess3D.stockfish) return;
-  const sf=Chess3D.stockfish;
-  const isWhiteTurn=Chess3D.game.turn()==='w';
-  // In comp-vs-comp, use separate white/black settings
-  const lvId=Chess3D.mode==='comp-vs-comp'?(isWhiteTurn?'c3d-level-w':'c3d-level-b'):'c3d-level';
-  const stId=Chess3D.mode==='comp-vs-comp'?(isWhiteTurn?'c3d-style-w':'c3d-style-b'):'c3d-style';
-  const lv=parseInt((document.getElementById(lvId)||{value:5}).value||5);
-  const style=BOT_STYLES.find(s=>s.id===(document.getElementById(stId)||{value:'balanced'}).value)||BOT_STYLES[0];
-  sf.postMessage(`position fen ${Chess3D.game.fen()}`);
-  sf.postMessage(`setoption name Skill Level value ${lv}`);
-  sf.postMessage(`setoption name Contempt value ${style.contempt}`);
-  sf.postMessage('go depth 13');
-}
-
-function updateEval(v){
-  const fill=document.getElementById('c3d-eval-fill');
-  const txt=document.getElementById('c3d-eval-txt');
-  if(!fill||!txt) return;
-  const pct=Math.max(2,Math.min(98,50+v*7));
-  fill.style.height=pct+'%';
-  txt.textContent=(v>=0?'+':'')+v.toFixed(1);
-}
-
-// ── Move list ─────────────────────────────────────────────────────
-function updateMoveList(){
-  const el=document.getElementById('c3d-move-list');
-  if(!el) return;
-  const hist=Chess3D.game.history();
-  if(!hist.length){el.innerHTML='<span style="color:rgba(255,255,255,.3);font-size:11px">No moves yet</span>';return;}
-  let html='';
-  for(let i=0;i<hist.length;i+=2){
-    const num=Math.floor(i/2)+1;
-    const w=hist[i]||'';
-    const b=hist[i+1]||'';
-    html+=`<span style="color:rgba(255,255,255,.4);margin-right:3px;font-size:10px">${num}.</span><span style="color:#fff;font-weight:600;font-size:11px;margin-right:6px">${w}</span>${b?`<span style="color:#cbd5e1;font-size:11px;margin-right:8px">${b}</span>`:''}`;
-  }
-  el.innerHTML=html;
-  el.scrollTop=el.scrollHeight;
-}
-
-// ── Coordinates ────────────────────────────────────────────────────
-function setCoordVis(show){
-  Chess3D.showCoords=show;
-  if(!Chess3D.boardGroup) return;
-  Chess3D.boardGroup.children.forEach(m=>{
-    if(m.geometry&&m.geometry.type==='PlaneGeometry') m.visible=show;
-  });
-}
-
-// ── UI Wiring ──────────────────────────────────────────────────────
-function wireUI(){
-  const get=id=>document.getElementById(id);
-
-  // Mode
-  const modeSelect=get('c3d-mode');
-  if(modeSelect) modeSelect.onchange=e=>{
-    Chess3D.mode=e.target.value;
-    const isCvC=Chess3D.mode==='comp-vs-comp';
-    get('c3d-engine-row')&&(get('c3d-engine-row').style.display=['play','comp-vs-comp'].includes(Chess3D.mode)?'flex':'none');
-    get('c3d-white-engine-row')&&(get('c3d-white-engine-row').style.display=isCvC?'flex':'none');
-    get('c3d-black-engine-row')&&(get('c3d-black-engine-row').style.display=isCvC?'flex':'none');
-    get('c3d-friend-row')&&(get('c3d-friend-row').style.display=Chess3D.mode==='friend'?'':'none');
-    get('c3d-status').textContent=Chess3D.mode.toUpperCase().replace(/-/g,' ');
-    syncPieces();
-  };
-
-  // Board theme
-  const boardSel=get('c3d-board');
-  if(boardSel) boardSel.onchange=e=>{Chess3D.boardTheme=e.target.value;buildBoard();syncPieces();};
-
-  // Piece style
-  const pieceSel=get('c3d-piece');
-  if(pieceSel) pieceSel.onchange=e=>{
-    Chess3D.pieceStyle=e.target.value;
-    // Remove and re-add all pieces
-    Object.values(Chess3D.pieces).forEach(p=>Chess3D.scene.remove(p.mesh));
-    Chess3D.pieces={};
-    syncPieces();
-  };
-
-  // BG
-  const bgSel=get('c3d-bg');
-  if(bgSel) bgSel.onchange=e=>{Chess3D.bgStyle=e.target.value;setBg();};
-
-  // Glare
-  const glareSel=get('c3d-glare');
-  if(glareSel) glareSel.onchange=e=>{Chess3D.glareColor=e.target.value;updateGlare();};
-
-  // View mode 2D/3D
-  const viewSel=get('c3d-view');
-  if(viewSel) viewSel.onchange=e=>{
-    const is2d=e.target.value==='2d';
-    const brd2d=get('c3d-board2d-wrap');
-    if(brd2d) brd2d.style.display=is2d?'flex':'none';
-    Chess3D.renderer.domElement.style.display=is2d?'none':'block';
-    if(is2d) update2D();
-  };
-
-  // Sound
-  const sndSel=get('c3d-sound');
-  if(sndSel) sndSel.onchange=e=>{Chess3D.soundEnabled=e.target.value==='true';};
-
-  // Anim
-  const animSel=get('c3d-anim');
-  if(animSel) animSel.onchange=e=>{Chess3D.animEnabled=e.target.value==='true';};
-
-  // Auto-rotate (for vs friend)
-  const rotSel=get('c3d-autorotate');
-  if(rotSel) rotSel.onchange=e=>{Chess3D.autoRotate=e.target.value==='true';};
-
-  // Side
-  const sideSel=get('c3d-side');
-  if(sideSel) sideSel.onchange=e=>{Chess3D.userColor=e.target.value;Chess3D.tTheta=Chess3D.userColor==='w'?Math.PI/2:-Math.PI/2;};
-
-  // Coordinates toggle
-  const coordSel=get('c3d-coords');
-  if(coordSel) coordSel.onchange=e=>setCoordVis(e.target.value==='true');
-
-  // Move list toggle
-  const mlBtn=get('c3d-btn-movelist');
-  if(mlBtn) mlBtn.onclick=()=>{
-    const ml=get('c3d-movelist-wrap');
-    if(!ml) return;
-    const vis=ml.style.display!=='none';
-    ml.style.display=vis?'none':'';
-    mlBtn.textContent=vis?'Show Moves':'Hide Moves';
-  };
-
-  // Comp-vs-comp white level/style
-  const wlvSel=get('c3d-level-w');
-  if(wlvSel){
-    wlvSel.innerHTML='';
-    for(let i=1;i<=20;i++){const o=document.createElement('option');o.value=i;o.textContent=`Lvl ${i} (~${ELO[i]})`;if(i===5)o.selected=true;wlvSel.appendChild(o);}
-    wlvSel.onchange=()=>sendToEngine();
-  }
-  const wstSel=get('c3d-style-w');
-  if(wstSel){
-    wstSel.innerHTML=BOT_STYLES.map(s=>`<option value="${s.id}">${s.label}</option>`).join('');
-    wstSel.onchange=()=>sendToEngine();
-  }
-  const bstSel=get('c3d-style-b');
-  if(bstSel){
-    bstSel.innerHTML=BOT_STYLES.map(s=>`<option value="${s.id}">${s.label}</option>`).join('');
-    bstSel.onchange=()=>sendToEngine();
-  }
-  const blvSel=get('c3d-level-b');
-  if(blvSel){ blvSel.onchange=()=>sendToEngine(); }
-
-  // Eval toggle
-  const evBtn=get('c3d-btn-eval');
-  if(evBtn) evBtn.onclick=()=>{
-    Chess3D.evalVisible=!Chess3D.evalVisible;
-    const ew=get('c3d-eval-wrap');if(ew) ew.style.display=Chess3D.evalVisible?'':'none';
-    evBtn.textContent=Chess3D.evalVisible?'Hide Eval':'Show Eval';
-  };
-
-  // Best move toggle
-  const bmBtn=get('c3d-btn-bm');
-  if(bmBtn) bmBtn.onclick=()=>{
-    Chess3D.bestMoveEnabled=!Chess3D.bestMoveEnabled;
-    const bmw=get('c3d-bm-wrap');if(bmw) bmw.style.display=Chess3D.bestMoveEnabled?'':'none';
-    bmBtn.textContent=Chess3D.bestMoveEnabled?'Hide Best':'Show Best';
-  };
-
-  // Settings panel toggle
-  const setBtn=get('c3d-btn-settings');
-  const setPanel=get('c3d-settings-panel');
-  if(setBtn&&setPanel) setBtn.onclick=()=>{
-    const vis=setPanel.style.display!=='none';
-    setPanel.style.display=vis?'none':'';
-    setBtn.textContent=vis?'⚙ Settings':'✕ Settings';
-  };
-
-  // Undo
-  const undoBtn=get('c3d-btn-undo');
-  if(undoBtn) undoBtn.onclick=()=>{
-    Chess3D.game.undo();
-    if(Chess3D.mode==='play') Chess3D.game.undo();
-    Object.values(Chess3D.pieces).forEach(p=>Chess3D.scene.remove(p.mesh));
-    Chess3D.pieces={};
-    syncPieces();
-  };
-
-  // Reset
-  const resetBtn=get('c3d-btn-reset');
-  if(resetBtn) resetBtn.onclick=()=>{
-    Chess3D.game.reset(); Chess3D.selectedSq=null;
-    Object.values(Chess3D.pieces).forEach(p=>Chess3D.scene.remove(p.mesh));
-    Chess3D.pieces={};
-    syncPieces();
-  };
-
-  // Recenter
-  const recBtn=get('c3d-btn-recenter');
-  if(recBtn) recBtn.onclick=()=>{
-    Chess3D.tTheta=Chess3D.userColor==='w'?Math.PI/2:-Math.PI/2;
-    Chess3D.tPhi=Math.PI/3.5;
-    Chess3D.radius=14;
-  };
-
-  // Flip
-  const flipBtn=get('c3d-btn-flip');
-  if(flipBtn) flipBtn.onclick=()=>{
-    Chess3D.tTheta+=Math.PI;
-    // Also flip 2D board
-    const b2=document.getElementById('c3d-board2d');
-    if(b2){b2.style.transform=b2.style.transform==='rotate(180deg)'?'':'rotate(180deg)';}
-  };
-
-  // Copy PGN
-  const hidePanel=get('c3d-btn-hide-panel');
-  const sidebar=get('c3d-sidebar');
-  if(hidePanel&&sidebar) hidePanel.onclick=()=>{
-    const hidden=sidebar.style.display==='none';
-    sidebar.style.display=hidden?'':'none';
-    hidePanel.textContent=hidden?'◀ Hide Panel':'▶ Show Panel';
-  };
-  const freezeBtn=get('c3d-btn-freeze');
-  if(freezeBtn) freezeBtn.onclick=()=>{
-    Chess3D.cameraFrozen=!Chess3D.cameraFrozen;
-    freezeBtn.textContent=Chess3D.cameraFrozen?'🔓 Unfreeze Cam':'🔒 Freeze Cam';
-    freezeBtn.style.background=Chess3D.cameraFrozen?'rgba(59,130,246,.25)':'';
-  };
-  const pgnBtn=get('c3d-btn-pgn');
-  if(pgnBtn) pgnBtn.onclick=()=>{
-    const ta=document.createElement('textarea');
-    ta.value=Chess3D.game.pgn()||'No moves yet';
-    document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
-    pgnBtn.textContent='✓ Copied!';setTimeout(()=>pgnBtn.textContent='Copy PGN',1500);
-  };
-
-  // WC level / style selectors
-  const lvSel=get('c3d-level'); if(lvSel) lvSel.onchange=()=>sendToEngine();
-  const stSel=get('c3d-style');
-  if(stSel){
-    stSel.innerHTML=BOT_STYLES.map(s=>`<option value="${s.id}">${s.label}</option>`).join('');
-    stSel.onchange=()=>{
-      const sty=BOT_STYLES.find(s=>s.id===stSel.value);
-      const desc=get('c3d-style-desc');
-      if(desc&&sty) desc.textContent=sty.desc;
-      sendToEngine();
-    };
-  }
-}
-
-// ── Expose ─────────────────────────────────────────────────────────
-window.chess3dInit=function(){
-  if(Chess3D.started) return;
-  Chess3D.started=true;
-  init();
-};
-window.chess3dReset=function(){
-  if(!Chess3D.started) return;
-  Chess3D.game.reset(); Chess3D.selectedSq=null;
-  Object.values(Chess3D.pieces).forEach(p=>Chess3D.scene.remove(p.mesh));
-  Chess3D.pieces={};
-  syncPieces();
+  }catch(e){}
+  var canAdmin=window._fb&&(window._fb.isAdmin||window._fb.blogger);
+  var p=[];
+  p.push('<button onclick="brCloseReader()" class="btn btn-ghost btn-sm" style="margin-bottom:16px">&larr; Back</button>');
+  if(rev){
+    if(rev.coverImage)p.push('<img src="'+rev.coverImage+'" style="width:100%;max-height:300px;object-fit:cover;border-radius:10px;margin-bottom:16px">');
+    else p.push('<div style="height:100px;background:linear-gradient(135deg,var(--accent),#7c3aed);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:40px;margin-bottom:16px">&#128218;</div>');
+    p.push('<div style="font-size:13px;color:#fbbf24;margin-bottom:4px">'+'&#11088;'.repeat(Math.max(1,Math.min(5,rev.rating)))+' '+rev.rating+'/5</div>');
+    p.push('<h1 style="margin:0 0 4px">'+rev.title+'</h1>');
+    if(rev.bookTitle)p.push('<div style="color:var(--text2);font-size:14px;margin-bottom:6px">&#128218; '+rev.bookTitle+'</div>');
+    p.push('<div style="color:var(--text2);font-size:12px;margin-bottom:16px">By '+rev.author+'</div>');
+    if(canAdmin)p.push('<div style="display:flex;gap:6px;margin-bottom:12px"><button class="btn btn-ghost btn-sm" onclick="brOpenEditor(\''+id+'\')">&#9999; Edit</button><button class="btn btn-ghost btn-sm" style="color:#ef4444" onclick="brDelete(\''+id+'\')">&#128465; Delete</button></div>');
+    p.push('<div style="line-height:1.8;color:var(--text)">'+rev.content+'</div>');
+  }else{p.push('<p>Loading...</p>');}
+  p.push('<hr style="margin:24px 0;border-color:var(--border)"><h3 style="margin:0 0 12px">&#128172; Comments</h3>');
+  if(window._fb&&window._fb.user){
+    p.push('<div style="display:flex;gap:8px;margin-bottom:14px"><input id="br-comment-inp" type="text" placeholder="Add a comment..." style="flex:1;padding:9px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px"><button class="btn btn-primary btn-sm" onclick="brPostComment(\''+id+'\')">Post</button></div>');
+  }else{p.push('<p style="color:var(--text2);font-size:13px">Sign in to comment.</p>');}
+  p.push('<div id="br-comments-list">'+commHtml+'</div>');
+  readerEl.style.display='block';
+  readerEl.innerHTML=p.join('');
+  if(typeof window.initArticleBoards==='function')window.initArticleBoards();
 };
 
+window.brCloseReader=function(){
+  var r=document.getElementById('br-reader');
+  var l=document.getElementById('br-list');
+  var s=document.getElementById('br-search');
+  if(r)r.style.display='none';
+  if(l)l.style.display='grid';
+  if(s)s.style.display='';
+  window.brLoadList(false);
+};
+
+window.brPostComment=async function(reviewId){
+  var inp=document.getElementById('br-comment-inp');
+  var txt=(inp&&inp.value||'').trim();
+  if(!txt)return;
+  var tok=await window._fb.user.getIdToken();
+  await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/bookreviews/'+reviewId+'/comments?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
+    method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+    body:JSON.stringify({fields:{text:{stringValue:txt},authorId:{stringValue:window._fb.user.uid},authorName:{stringValue:window._fb.user.displayName||window._fb.username||'Anonymous'},createdAt:{timestampValue:new Date().toISOString()}}})
+  });
+  if(inp)inp.value='';
+  showToast('Comment posted!');
+  window.brOpenReader(reviewId);
+};
+
+window.brDeleteComment=async function(reviewId,commentId){
+  if(!window._fb.isAdmin&&!confirm('Delete your comment?'))return;
+  var tok=await window._fb.user.getIdToken();
+  await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/bookreviews/'+reviewId+'/comments/'+commentId+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{method:'DELETE',headers:{Authorization:'Bearer '+tok}});
+  window.brOpenReader(reviewId);
+};
+
+window.brOpenEditor=function(id){
+  if(!window._fb||!window._fb.user){if(typeof fbOpenAccount==='function')fbOpenAccount();return;}
+  if(!window._fb.isAdmin&&!window._fb.blogger){if(typeof showToast==='function')showToast('You need blogger privileges to write reviews.');return;}
+  document.getElementById('br-editing-id').value=id||'';
+  document.getElementById('br-inp-title').value='';
+  document.getElementById('br-inp-book').value='';
+  document.getElementById('br-inp-cover').value='';
+  document.getElementById('br-inp-rating').value='5';
+  document.getElementById('br-editor-body').innerHTML='';
+  document.getElementById('br-editor-html').value='';
+  document.getElementById('br-editor-html').style.display='none';
+  document.getElementById('br-editor-body').style.display='block';
+  document.getElementById('br-editor-title').textContent=id?'Edit Review':'Write Review';
+  if(id){var rev=_brAllReviews.find(function(r){return r.id===id;});if(rev){document.getElementById('br-inp-title').value=rev.title||'';document.getElementById('br-inp-book').value=rev.bookTitle||'';document.getElementById('br-inp-cover').value=rev.coverImage||'';document.getElementById('br-inp-rating').value=String(rev.rating||5);document.getElementById('br-editor-body').innerHTML=rev.content||'';}}
+  document.getElementById('br-editor-modal').style.display='block';
+};
+
+window.brCloseEditor=function(){document.getElementById('br-editor-modal').style.display='none';};
+
+window.brSave=async function(isDraft){
+  var title=document.getElementById('br-inp-title').value.trim();
+  if(!title){if(typeof showToast==='function')showToast('Please enter a title.');return;}
+  var content=_brHtmlMode?document.getElementById('br-editor-html').value:document.getElementById('br-editor-body').innerHTML;
+  var id=document.getElementById('br-editing-id').value;
+  var tok=await window._fb.user.getIdToken();
+  var fields={title:{stringValue:title},bookTitle:{stringValue:document.getElementById('br-inp-book').value},coverImage:{stringValue:document.getElementById('br-inp-cover').value},rating:{integerValue:parseInt(document.getElementById('br-inp-rating').value)||5},content:{stringValue:content},authorId:{stringValue:window._fb.user.uid},authorName:{stringValue:window._fb.user.displayName||window._fb.username||'Anonymous'},isDraft:{booleanValue:isDraft},publishedAt:{timestampValue:new Date().toISOString()}};
+  var method=id?'PATCH':'POST';
+  var url='https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/bookreviews'+(id?'/'+id:'')+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q';
+  try{await fetch(url,{method:method,headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:JSON.stringify({fields:fields})});if(typeof showToast==='function')showToast(isDraft?'Draft saved!':'Review published! &#128218;');window.brCloseEditor();window.brLoadList(false);}catch(e){if(typeof showToast==='function')showToast('Error: '+e.message);}
+};
+
+window.brDelete=async function(id){
+  if(!confirm('Delete this review?'))return;
+  var tok=await window._fb.user.getIdToken();
+  await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/bookreviews/'+id+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{method:'DELETE',headers:{Authorization:'Bearer '+tok}});
+  if(typeof showToast==='function')showToast('Review deleted.');
+  window.brCloseReader();window.brLoadList(false);
+};
+
+window.brLoadDrafts=async function(){
+  if(!window._fb||!window._fb.user)return;
+  window.brLoadList(true);
+};
+
+window.brFmt=function(cmd){var b=document.getElementById('br-editor-body');if(b){b.focus();document.execCommand(cmd,false,null);}};
+window.brInsertLink=function(){var url=prompt('Enter URL:');if(!url)return;document.getElementById('br-editor-body').focus();document.execCommand('createLink',false,url);};
+window.brToggleHtml=function(){_brHtmlMode=!_brHtmlMode;var b=document.getElementById('br-editor-body');var h=document.getElementById('br-editor-html');if(_brHtmlMode){h.value=b.innerHTML;b.style.display='none';h.style.display='block';}else{b.innerHTML=h.value;h.style.display='none';b.style.display='block';}};
+window.brInsertChessBoard=function(){
+  if(typeof window.artInsertChessBoard==='function'){
+    var boardId='br-chess-'+Date.now();
+    var onU='onclick="boardUndo(this.closest(\'.inline-chess-board\').dataset.boardId)"';
+    var onR='onclick="boardReset(this.closest(\'.inline-chess-board\').dataset.boardId)"';
+    var html='<div class="inline-chess-board" data-board-id="'+boardId+'" style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin:12px 0;padding:12px;background:var(--bg3);border-radius:8px"><div><div id="'+boardId+'" style="display:grid;grid-template-columns:repeat(8,48px);grid-template-rows:repeat(8,48px);border:2px solid var(--border);border-radius:4px"></div><div style="display:flex;gap:6px;margin-top:6px"><button '+onU+' style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer">Undo</button><button '+onR+' style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer">Reset</button></div></div><div id="'+boardId+'-moves" style="font-family:monospace;font-size:12px;color:var(--text2);max-height:200px;overflow-y:auto;min-width:140px"><em>No moves yet</em></div></div>';
+    var body=document.getElementById('br-editor-body');
+    if(body){body.focus();document.execCommand('insertHTML',false,html);}
+    setTimeout(function(){if(typeof window.initInlineBoard==='function')window.initInlineBoard(boardId);},100);
+  }
+};
+</script>
+
+<script id="inline-chess-board-script">
+/* Inline interactive chess boards for article and book review editors */
+(function(){
+var _boards={};
+window.initInlineBoard=function(id){
+  var Chess2=window.Chess;
+  if(!Chess2){console.warn('Chess.js not loaded for inline board');return;}
+  var container=document.getElementById(id);
+  if(!container||_boards[id])return;
+  var game=new Chess2();
+  _boards[id]={game:game,selected:null};
+  var pi={w:{p:'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg',r:'https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg',n:'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg',b:'https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg',q:'https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg',k:'https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg'},b:{p:'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg',r:'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg',n:'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg',b:'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg',q:'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg',k:'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg'}};
+  function render(){
+    var bd=_boards[id].game.board();
+    var theme=['#b58863','#f0d9b5'];
+    container.innerHTML='';
+    for(var row=0;row<8;row++){for(var col=0;col<8;col++){
+      var sq=String.fromCharCode(97+col)+(8-row);
+      var piece=bd[row][col];
+      var isLight=(row+col)%2===1;
+      var isSel=_boards[id].selected===sq;
+      var cell=document.createElement('div');
+      cell.style.cssText='width:48px;height:48px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:'+(isSel?'rgba(100,200,100,0.5)':theme[isLight?1:0]);
+      cell.dataset.sq=sq;
+      cell.dataset.bid=id;
+      if(piece){var img=document.createElement('img');img.src=pi[piece.color][piece.type];img.style.cssText='width:42px;height:42px;pointer-events:none';cell.appendChild(img);}
+      cell.onclick=function(){
+        var s=this.dataset.sq;
+        var bid=this.dataset.bid;
+        var bs=_boards[bid];
+        if(!bs)return;
+        if(bs.selected){
+          if(bs.selected===s){bs.selected=null;render();return;}
+          var mv=bs.game.move({from:bs.selected,to:s,promotion:'q'});
+          if(mv){bs.selected=null;render();updateMoves(bid);}
+          else{bs.selected=bs.game.get(s)?s:null;render();}
+        }else{bs.selected=bs.game.get(s)?s:null;render();}
+      };
+      container.appendChild(cell);
+    }}
+  }
+  function updateMoves(bid){
+    var mvEl=document.getElementById(bid+'-moves');
+    if(!mvEl)return;
+    var hist=_boards[bid].game.history();
+    if(!hist.length){mvEl.innerHTML='<em>No moves yet</em>';return;}
+    var html='';for(var i=0;i<hist.length;i+=2){html+='<div style="color:var(--text);font-size:12px">'+(Math.floor(i/2)+1)+'. '+hist[i]+(hist[i+1]?' '+hist[i+1]:'')+'</div>';}
+    mvEl.innerHTML=html;mvEl.scrollTop=mvEl.scrollHeight;
+  }
+  _boards[id].render=render;
+  _boards[id].updateMoves=function(){updateMoves(id);};
+  render();
+};
+
+window.boardUndo=function(id){var b=_boards[id];if(!b)return;b.game.undo();b.selected=null;if(b.render)b.render();if(b.updateMoves)b.updateMoves();};
+window.boardReset=function(id){var b=_boards[id];if(!b)return;b.game.reset();b.selected=null;if(b.render)b.render();if(b.updateMoves)b.updateMoves();};
+window.initArticleBoards=function(){document.querySelectorAll('.inline-chess-board[data-board-id]').forEach(function(el){var id=el.dataset.boardId;if(!document.getElementById(id)||_boards[id])return;window.initInlineBoard(id);});};
+
+window.artInsertChessBoard=function(){
+  var boardId='art-chess-'+Date.now();
+  var onU='onclick="boardUndo(this.closest(\'.inline-chess-board\').dataset.boardId)"';
+  var onR='onclick="boardReset(this.closest(\'.inline-chess-board\').dataset.boardId)"';
+  var html='<div class="inline-chess-board" data-board-id="'+boardId+'" style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin:12px 0;padding:12px;background:var(--bg3);border-radius:8px"><div><div id="'+boardId+'" style="display:grid;grid-template-columns:repeat(8,48px);grid-template-rows:repeat(8,48px);border:2px solid var(--border);border-radius:4px"></div><div style="display:flex;gap:6px;margin-top:6px"><button '+onU+' style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer">Undo</button><button '+onR+' style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer">Reset</button></div></div><div id="'+boardId+'-moves" style="font-family:monospace;font-size:12px;color:var(--text2);max-height:200px;overflow-y:auto;min-width:140px"><em>No moves yet</em></div></div>';
+  var body=document.getElementById('art-editor-body');
+  if(body){body.focus();document.execCommand('insertHTML',false,html);}
+  setTimeout(function(){window.initInlineBoard(boardId);},100);
+};
 })();
-
 </script>
 
 <script>
-/* ══ Chess64 3D helpers ═══════════════════════════════════════════ */
+/* ══ Page helpers ══════════════════════════════════════════════════ */
 function chess3dShowGame(){
   var lnd=document.getElementById('chess3d-landing');
   var panel=document.getElementById('chess3d-game-panel');
-  if(lnd) lnd.style.display='none';
-  if(panel) panel.style.display='block';
+  if(lnd)lnd.style.display='none';
+  if(panel)panel.style.display='block';
   setTimeout(function(){
-    if(typeof window.chess3dInit==='function') window.chess3dInit();
+    if(typeof window.chess3dInit==='function')window.chess3dInit();
   },80);
 }
 function chess3dHideGame(){
   var lnd=document.getElementById('chess3d-landing');
   var panel=document.getElementById('chess3d-game-panel');
-  if(lnd) lnd.style.display='block';
-  if(panel) panel.style.display='none';
+  if(lnd)lnd.style.display='block';
+  if(panel)panel.style.display='none';
 }
-/* ══ City Dash helpers ════════════════════════════════════════════ */
 function cityDashShow(){
   var main=document.getElementById('tilted-main-content');
   var game=document.getElementById('tilted-game-panel');
   var panel=document.getElementById('city-dash-panel');
-  if(main) main.style.display='none';
-  if(game) game.style.display='none';
-  if(panel){ panel.style.display='block'; setTimeout(function(){panel.scrollIntoView({behavior:'smooth',block:'start'});window.scrollTo(0,panel.getBoundingClientRect().top+window.scrollY-60);},80); setTimeout(function(){panel.scrollIntoView({behavior:'smooth',block:'start'});window.scrollTo(0,panel.offsetTop-60);},50); }
+  if(main)main.style.display='none';
+  if(game)game.style.display='none';
+  if(panel){panel.style.display='block';setTimeout(function(){panel.scrollIntoView({behavior:'smooth',block:'start'});window.scrollTo(0,panel.getBoundingClientRect().top+window.scrollY-60);},80);}
   setTimeout(function(){
-    if(typeof window.cityDashInit==='function') window.cityDashInit();
+    if(typeof window.cityDashInit==='function')window.cityDashInit();
     window.dispatchEvent(new Event('resize'));
-  },100);
+  },120);
+}
+function cityDashHide(){
+  var main=document.getElementById('tilted-main-content');
+  var panel=document.getElementById('city-dash-panel');
+  if(main)main.style.display='block';
+  if(panel)panel.style.display='none';
+  document.body.style.overflow='';document.documentElement.style.overflow='';
+  _crScrollFrozen=false;
+  var btn=document.getElementById('cr-freeze-scroll-btn');
+  if(btn){btn.textContent='🔒 Lock Scroll';btn.style.background='';}
 }
 var _crScrollFrozen=false;
 function crToggleFreezeScroll(){
   _crScrollFrozen=!_crScrollFrozen;
   var btn=document.getElementById('cr-freeze-scroll-btn');
-  if(_crScrollFrozen){
-    document.body.style.overflow='hidden';
-    document.documentElement.style.overflow='hidden';
-    if(btn){btn.textContent='🔓 Unlock Scroll';btn.style.background='rgba(59,130,246,.25)';}
-  } else {
-    document.body.style.overflow='';
-    document.documentElement.style.overflow='';
-    if(btn){btn.textContent='🔒 Lock Scroll';btn.style.background='';}
-  }
+  if(_crScrollFrozen){document.body.style.overflow='hidden';document.documentElement.style.overflow='hidden';if(btn){btn.textContent='🔓 Unlock Scroll';btn.style.background='rgba(59,130,246,.25)';}}
+  else{document.body.style.overflow='';document.documentElement.style.overflow='';if(btn){btn.textContent='🔒 Lock Scroll';btn.style.background='';}}
 }
 function crManualShow(){var m=document.getElementById('cr-manual');if(m)m.style.display='block';}
 function crManualHide(){var m=document.getElementById('cr-manual');if(m)m.style.display='none';}
-function cityDashHide(){
-  var main=document.getElementById('tilted-main-content');
-  var panel=document.getElementById('city-dash-panel');
-  if(main) main.style.display='block';
-  if(panel) panel.style.display='none';
-  // Restore scroll
-  document.body.style.overflow='';
-  document.documentElement.style.overflow='';
-  _crScrollFrozen=false;
-  var btn=document.getElementById('cr-freeze-scroll-btn');
-  if(btn){btn.textContent='🔒 Lock Scroll';btn.style.background='';}
-}
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
-/* ══ City Dash helpers ══════════════════════════════════════════ */
-/* neonRunnerShow removed */_nrs=function(){
-  var main=document.getElementById('tilted-main-content');
-  var game=document.getElementById('tilted-game-panel');
-  var panel=document.getElementById('neon-runner-panel');
-  if(main) main.style.display='none';
-  if(game) game.style.display='none';
-  if(panel) panel.style.display='block';
-  setTimeout(function(){
-    if(typeof window.neonRunnerStart==='function') window.neonRunnerStart();
-    var wrap=document.getElementById('neon-runner-canvas-wrap');
-    if(wrap) window.dispatchEvent(new Event('resize'));
-  },150);
-}
-/* neonRunnerHide removed */_nrh=function(){
-  var main=document.getElementById('tilted-main-content');
-  var panel=document.getElementById('neon-runner-panel');
-  if(main) main.style.display='block';
-  if(panel) panel.style.display='none';
-}
-
-/* ══ Home demo animation — respect piece-anim toggle ═════════════ */
+</body></html><!-- Chess64 3D game JS removed for rebuild - using simplified version -->
+<script id="chess3d-game-script">
 (function(){
-  var _origToggle=window.togglePieceAnim;
-  window.togglePieceAnim=function(){
-    if(_origToggle) _origToggle.apply(this,arguments);
-    var on=typeof _animatePieces!=='undefined'?_animatePieces:true;
-    var el=document.getElementById('home-demo-board');
-    if(el) el.style.opacity=on?'1':'0.35';
-    if(!on&&typeof _hdInt!=='undefined'&&_hdInt){clearInterval(_hdInt);_hdInt=null;}
-    else if(on&&!_hdInt&&typeof initHomeDemo==='function') initHomeDemo();
-  };
+'use strict';
+const C3={scene:null,camera:null,renderer:null,raycaster:null,mouse:new THREE.Vector2(),
+  game:null,sf:null,sfReady:false,pieces:{},boardGroup:new THREE.Group(),rimLight:null,
+  theta:Math.PI/2,phi:Math.PI/3.5,radius:14,tTheta:Math.PI/2,tPhi:Math.PI/3.5,
+  isDragging:false,dragMoved:false,prevMouse:{x:0,y:0},startMouse:{x:0,y:0},
+  touchId:-1,touchX0:0,touchY0:0,touchMoved:false,pinchDist:0,
+  selectedSq:null,mode:'analyze',userColor:'w',
+  bestMoveOn:true,evalVisible:true,soundOn:true,animOn:true,autoRotate:false,
+  boardTheme:'midnight',pieceStyle:'classic',bgStyle:'dark',glareColor:'blue',
+  cameraFrozen:false,showCoords:false,started:false,animating:{}};
+const THEMES={midnight:{light:0x3a3a4a,dark:0x1a1a2a,trim:0x0a0a15},
+  wood:{light:0xeedcb3,dark:0x7a503a,trim:0x4a2e1f},marble:{light:0xfafafa,dark:0x22c55e,trim:0x166534},
+  cyber:{light:0x00f3ff,dark:0x001a1a,trim:0x000000},royal:{light:0xd4af37,dark:0x2d1b69,trim:0x1a0f3d},
+  ice:{light:0xe0f2fe,dark:0x0369a1,trim:0x082f49}};
+const BACKGROUNDS={dark:0x080812,midnight:0x0a0a1a,forest:0x0a1a0a,crimson:0x1a0808,void:0x000000};
+const BOT_STYLES=[{id:'balanced',label:'Balanced',contempt:0,desc:'Plays principled chess'},{id:'aggressive',label:'Aggressive',contempt:80,desc:'Attacks and sacrifices'},{id:'positional',label:'Positional',contempt:-20,desc:'Slow squeezing style'},{id:'tal',label:'Tal Inspired',contempt:120,desc:'Wild tactical complications'},{id:'defensive',label:'Defensive',contempt:-60,desc:'Solid and reactive'},{id:'gambit',label:'Gambiteer',contempt:50,desc:'Sacrifices for initiative'},{id:'boring',label:'Boring',contempt:-100,desc:'Grinds endgames'},{id:'explosive',label:'Explosive',contempt:150,desc:'Maximum chaos'}];
+const ELO={1:400,2:600,3:800,4:950,5:1100,6:1250,7:1400,8:1550,9:1700,10:1850,11:2000,12:2100,13:2200,14:2300,15:2400,16:2500,17:2600,18:2700,19:2800,20:3300};
+const PI={w:{p:'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg',r:'https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg',n:'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg',b:'https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg',q:'https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg',k:'https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg'},b:{p:'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg',r:'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg',n:'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg',b:'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg',q:'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg',k:'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg'}};
+const AudioCtx2={ctx:null};
+function playThunk(){if(!C3.soundOn)return;try{if(!AudioCtx2.ctx)AudioCtx2.ctx=new(window.AudioContext||window.webkitAudioContext)();const ctx=AudioCtx2.ctx;if(ctx.state==='suspended')ctx.resume();const buf=ctx.createBuffer(1,ctx.sampleRate*0.12,ctx.sampleRate);const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.exp(-i/(ctx.sampleRate*0.04));const src=ctx.createBufferSource();src.buffer=buf;const g=ctx.createGain();g.gain.setValueAtTime(0.25,ctx.currentTime);const fl=ctx.createBiquadFilter();fl.type='bandpass';fl.frequency.value=320;src.connect(fl);fl.connect(g);g.connect(ctx.destination);src.start();}catch(e){}}
+function getMat(isW){
+  if(C3.pieceStyle==='glass')return new THREE.MeshPhysicalMaterial({color:isW?0xddeeff:0x112233,transmission:0.92,roughness:0.04,thickness:1.2});
+  if(C3.pieceStyle==='neon'){const nc=isW?0x00f3ff:0xff00ff;return new THREE.MeshStandardMaterial({color:nc,emissive:nc,emissiveIntensity:0.7,roughness:0.3});}
+  if(C3.pieceStyle==='gold')return new THREE.MeshStandardMaterial({color:0xffd700,roughness:0.1,metalness:1});
+  const rough=C3.pieceStyle==='metallic'?0.15:0.6,metal=C3.pieceStyle==='metallic'?0.9:0;
+  return new THREE.MeshStandardMaterial({color:isW?0xeeeeee:0x111111,roughness:rough,metalness:metal});
+}
+function makePiece(type,color){
+  const g=new THREE.Group(),isW=color==='w',mat=getMat(isW);
+  const add=(geo,y)=>{const m=new THREE.Mesh(geo,mat);m.position.y=y;m.castShadow=true;g.add(m);return m;};
+  add(new THREE.CylinderGeometry(0.40,0.46,0.14,24),0.07);
+  add(new THREE.CylinderGeometry(0.34,0.40,0.10,24),0.19);
+  if(type==='p'){add(new THREE.CylinderGeometry(0.14,0.30,0.58,16),0.43);add(new THREE.SphereGeometry(0.20,16,16),0.82);}
+  else if(type==='r'){add(new THREE.CylinderGeometry(0.26,0.32,0.78,16),0.47);add(new THREE.CylinderGeometry(0.30,0.30,0.22,8),0.97);for(let i=0;i<4;i++){const bb=add(new THREE.BoxGeometry(0.12,0.18,0.12),1.12);bb.position.x=Math.cos(i*Math.PI/2)*0.22;bb.position.z=Math.sin(i*Math.PI/2)*0.22;}}
+  else if(type==='n'){add(new THREE.CylinderGeometry(0.22,0.30,0.40,16),0.34);const nh=add(new THREE.BoxGeometry(0.26,0.52,0.36),0.72);nh.rotation.x=0.35;const nh2=add(new THREE.BoxGeometry(0.22,0.28,0.46),1.02);nh2.rotation.x=-0.2;}
+  else if(type==='b'){add(new THREE.CylinderGeometry(0.14,0.28,0.88,16),0.54);const bh=add(new THREE.SphereGeometry(0.20,16,16),1.06);bh.scale.y=1.25;add(new THREE.SphereGeometry(0.07,8,8),1.38);}
+  else if(type==='q'){add(new THREE.CylinderGeometry(0.18,0.32,1.12,20),0.70);add(new THREE.SphereGeometry(0.26,16,16),1.38);for(let i=0;i<5;i++){const qp=add(new THREE.SphereGeometry(0.07,8,8),1.62);qp.position.x=Math.cos(i*2*Math.PI/5)*0.20;qp.position.z=Math.sin(i*2*Math.PI/5)*0.20;}}
+  else if(type==='k'){add(new THREE.CylinderGeometry(0.20,0.34,1.26,20),0.77);add(new THREE.CylinderGeometry(0.22,0.22,0.14,20),1.47);add(new THREE.BoxGeometry(0.10,0.38,0.10),1.68);add(new THREE.BoxGeometry(0.28,0.10,0.10),1.64);}
+  return g;
+}
+function buildBoard(){
+  if(C3.boardGroup.parent)C3.scene.remove(C3.boardGroup);
+  C3.boardGroup=new THREE.Group();
+  const t=THEMES[C3.boardTheme]||THEMES.midnight;
+  const frame=new THREE.Mesh(new THREE.BoxGeometry(9.4,0.18,9.4),new THREE.MeshStandardMaterial({color:t.trim,roughness:0.3,metalness:0.4}));
+  frame.position.y=-0.08;frame.receiveShadow=true;C3.boardGroup.add(frame);
+  const sqGeo=new THREE.BoxGeometry(1,0.12,1);
+  for(let r=0;r<8;r++)for(let cc=0;cc<8;cc++){
+    const isL=(r+cc)%2===0;
+    const sq=new THREE.Mesh(sqGeo,new THREE.MeshStandardMaterial({color:isL?t.light:t.dark,roughness:0.35,metalness:0.05}));
+    sq.position.set(cc-3.5,0,r-3.5);sq.receiveShadow=true;
+    sq.userData.sq=String.fromCharCode(97+cc)+(8-r);
+    C3.boardGroup.add(sq);
+  }
+  // Coord labels
+  const cv=document.createElement('canvas');cv.width=512;cv.height=512;
+  const cx=cv.getContext('2d');cx.font='bold 36px Arial';cx.fillStyle='rgba(255,255,255,0.55)';
+  ['a','b','c','d','e','f','g','h'].forEach((l,i)=>cx.fillText(l,i*64+24,500));
+  ['1','2','3','4','5','6','7','8'].forEach((l,i)=>cx.fillText(l,4,(7-i)*64+44));
+  const lm=new THREE.Mesh(new THREE.PlaneGeometry(8,8),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv),transparent:true,opacity:0.7}));
+  lm.rotation.x=-Math.PI/2;lm.position.y=0.07;lm.userData.coordLabel=true;
+  C3.boardGroup.add(lm);
+  C3.scene.add(C3.boardGroup);
+  setCoordVis(C3.showCoords);
+}
+function setCoordVis(show){C3.showCoords=show;if(!C3.boardGroup)return;C3.boardGroup.children.forEach(m=>{if(m.userData.coordLabel)m.visible=show;});}
+function updateCamera(){if(C3.cameraFrozen)return;const{theta,phi,radius,camera}=C3;camera.position.set(radius*Math.sin(phi)*Math.cos(theta),radius*Math.cos(phi),radius*Math.sin(phi)*Math.sin(theta));camera.lookAt(0,0,0);}
+function updateGlare(){if(!C3.rimLight)return;const cols={blue:0x3b82f6,red:0xef4444,green:0x22c55e,gold:0xf59e0b};const col=cols[C3.glareColor];if(!col){C3.rimLight.intensity=0;}else{C3.rimLight.color.set(col);C3.rimLight.intensity=2.2;}}
+function syncPieces(){
+  const board=C3.game.board();const active={};
+  for(let r=0;r<8;r++)for(let cc=0;cc<8;cc++)if(board[r][cc])active[String.fromCharCode(97+cc)+(8-r)]=board[r][cc];
+  Object.keys(C3.pieces).forEach(sq=>{const p=C3.pieces[sq];if(!C3.animating[sq]&&(!active[sq]||active[sq].type!==p.type||active[sq].color!==p.color)){C3.scene.remove(p.mesh);delete C3.pieces[sq];}});
+  Object.keys(active).forEach(sq=>{if(!C3.pieces[sq]){const info=active[sq];const mesh=makePiece(info.type,info.color);const[cc,r]=[sq.charCodeAt(0)-97,8-parseInt(sq[1])];mesh.position.set(cc-3.5,0.12,r-3.5);C3.scene.add(mesh);C3.pieces[sq]={type:info.type,color:info.color,mesh};}});
+  C3.boardGroup.children.forEach(m=>{if(!m.userData.sq)return;const isSel=m.userData.sq===C3.selectedSq;m.material.emissive=new THREE.Color(isSel?0x3b82f6:0x000000);m.material.emissiveIntensity=isSel?0.5:0;});
+  update2D();updateMoveList();if(C3.sfReady)sendToEngine();
+}
+function doMove(moveObj){
+  const from=typeof moveObj==='string'?moveObj.slice(0,2):moveObj.from;
+  const to=typeof moveObj==='string'?moveObj.slice(2,4):moveObj.to;
+  const promo=typeof moveObj==='string'?(moveObj[4]||'q'):'q';
+  if(C3.pieces[to]){C3.scene.remove(C3.pieces[to].mesh);delete C3.pieces[to];}
+  const mp=C3.pieces[from];const mv=C3.game.move({from,to,promotion:promo});if(!mv)return false;
+  if(mp){C3.pieces[to]=mp;delete C3.pieces[from];
+    if(C3.animOn){const[fc,fr]=[from.charCodeAt(0)-97,8-parseInt(from[1])];const[tc,tr]=[to.charCodeAt(0)-97,8-parseInt(to[1])];const start=new THREE.Vector3(fc-3.5,0.12,fr-3.5);const end=new THREE.Vector3(tc-3.5,0.12,tr-3.5);mp.mesh.position.copy(start);C3.animating[to]=true;const t0=performance.now(),dur=380;(function step(){const p=Math.min((performance.now()-t0)/dur,1),e=1-Math.pow(1-p,3);mp.mesh.position.lerpVectors(start,end,e);mp.mesh.position.y=0.12+Math.sin(p*Math.PI)*0.65;if(p<1)requestAnimationFrame(step);else{delete C3.animating[to];mp.mesh.position.copy(end);playThunk();syncPieces();}})();}
+    else{const[tc,tr]=[to.charCodeAt(0)-97,8-parseInt(to[1])];mp.mesh.position.set(tc-3.5,0.12,tr-3.5);playThunk();syncPieces();}}
+  if(C3.mode==='friend'&&C3.autoRotate)C3.tTheta+=Math.PI;
+  C3.selectedSq=null;syncPieces();return true;
+}
+function handleSqClick(sq){
+  const g=C3.game;
+  if(C3.mode==='play'&&g.turn()!==C3.userColor)return;
+  if(C3.mode==='comp-vs-comp')return;
+  if(C3.selectedSq){
+    if(C3.selectedSq===sq){C3.selectedSq=null;syncPieces();return;}
+    const ok=doMove({from:C3.selectedSq,to:sq,promotion:'q'});
+    if(!ok){const p=g.get(sq);C3.selectedSq=(p&&(C3.mode==='analyze'||p.color===g.turn()))?sq:null;}
+  }else{const p=g.get(sq);if(p&&(C3.mode==='analyze'||p.color===g.turn()))C3.selectedSq=sq;}
+  syncPieces();
+}
+function doRaycast(){
+  const all=[...C3.boardGroup.children];Object.values(C3.pieces).forEach(piece=>{if(piece.mesh)piece.mesh.children.forEach(ch=>all.push(ch));});
+  const hits=C3.raycaster.intersectObjects(all,true);let hitSq=null;
+  for(const h of hits){if(h.object.userData&&h.object.userData.sq){hitSq=h.object.userData.sq;break;}for(const[sq,piece]of Object.entries(C3.pieces)){if(piece.mesh&&piece.mesh.children.includes(h.object)){hitSq=sq;break;}}if(hitSq)break;}
+  if(hitSq)handleSqClick(hitSq);
+}
+function update2D(){
+  const el=document.getElementById('c3d-board2d');if(!el)return;
+  const t=THEMES[C3.boardTheme]||THEMES.midnight;const hex=n=>'#'+n.toString(16).padStart(6,'0');
+  if(el.children.length!==64){el.innerHTML='';for(let i=0;i<64;i++){const div=document.createElement('div');div.setAttribute('data-i',i);div.style.cssText='display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;aspect-ratio:1;';div.innerHTML='<img style="width:88%;height:88%;pointer-events:none;display:none" />';el.appendChild(div);}}
+  const divs=el.children;
+  for(let i=0;i<64;i++){const r=7-Math.floor(i/8),cc=i%8;const sq=String.fromCharCode(97+cc)+(r+1);const piece=C3.game.get(sq);const isL=(r+cc)%2===0;const div=divs[i];div.style.background=hex(isL?t.light:t.dark);div.style.boxShadow=sq===C3.selectedSq?'inset 0 0 0 3px #3b82f6':'';div.onclick=()=>handleSqClick(sq);const img=div.querySelector('img');if(piece){if(img.src!==PI[piece.color][piece.type])img.src=PI[piece.color][piece.type];img.style.display='block';}else img.style.display='none';}
+}
+function updateMoveList(){
+  const el=document.getElementById('c3d-move-list');if(!el)return;
+  const hist=C3.game.history();if(!hist.length){el.innerHTML='<span style="color:rgba(255,255,255,.3);font-size:11px">No moves yet</span>';return;}
+  let html='';for(let i=0;i<hist.length;i+=2){const num=Math.floor(i/2)+1;html+=`<span style="color:rgba(255,255,255,.4);font-size:10px">${num}.</span><span style="color:#fff;font-weight:600;font-size:11px;margin-right:6px"> ${hist[i]}</span>${hist[i+1]?`<span style="color:#cbd5e1;font-size:11px;margin-right:8px">${hist[i+1]}</span>`:''}`;}
+  el.innerHTML=html;el.scrollTop=el.scrollHeight;
+}
+async function initEngine(){
+  try{const r=await fetch('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');const blob=new Blob([await r.text()],{type:'application/javascript'});C3.sf=new Worker(URL.createObjectURL(blob));
+  C3.sf.onmessage=e=>{const line=e.data;
+    if(line.startsWith('info depth')){const sc=line.match(/score cp (-?\d+)/);const sm=line.match(/score mate (-?\d+)/);const pv=line.match(/pv ([a-h][1-8][a-h][1-8][qrbn]?)/);
+      if(sc){let v=parseInt(sc[1])/100;if(C3.game.turn()==='b')v=-v;updateEval(v);}else if(sm)updateEval(parseInt(sm[1])>0?15:-15);
+      if(pv&&C3.bestMoveOn){const uci=pv[1];const tmp=new Chess(C3.game.fen());const mv=tmp.move({from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]||'q'});const bm=document.getElementById('c3d-best-val');if(bm)bm.textContent=mv?mv.san:uci;}}
+    if(line.startsWith('bestmove')){const mv=line.split(' ')[1];if(mv&&mv!=='(none)'){const should=(C3.mode==='play'&&C3.game.turn()!==C3.userColor)||C3.mode==='comp-vs-comp';if(should)setTimeout(()=>doMove(mv),500);}}};
+  C3.sf.postMessage('uci');C3.sf.postMessage('isready');C3.sfReady=true;
+  const populateSel=(id,isStyle)=>{const sel=document.getElementById(id);if(!sel)return;if(isStyle){sel.innerHTML=BOT_STYLES.map(s=>`<option value="${s.id}">${s.label}</option>`).join('');}else{sel.innerHTML='';for(let i=1;i<=20;i++){const o=document.createElement('option');o.value=i;o.textContent='Lvl '+i+' (~'+ELO[i]+')';if(i===5)o.selected=true;sel.appendChild(o);}}};
+  ['c3d-level','c3d-level-w','c3d-level-b'].forEach(id=>populateSel(id,false));
+  ['c3d-style','c3d-style-w','c3d-style-b'].forEach(id=>populateSel(id,true));
+  }catch(e){console.log('Engine error',e);}
+}
+function updateEval(v){const fill=document.getElementById('c3d-eval-fill');const txt=document.getElementById('c3d-eval-txt');if(!fill||!txt)return;const pct=Math.max(2,Math.min(98,50+v*7));fill.style.height=pct+'%';txt.textContent=(v>=0?'+':'')+v.toFixed(1);}
+function sendToEngine(){
+  if(!C3.sfReady||!C3.sf)return;
+  const isW=C3.game.turn()==='w';
+  const lvId=C3.mode==='comp-vs-comp'?(isW?'c3d-level-w':'c3d-level-b'):'c3d-level';
+  const stId=C3.mode==='comp-vs-comp'?(isW?'c3d-style-w':'c3d-style-b'):'c3d-style';
+  const lv=parseInt((document.getElementById(lvId)||{value:5}).value||5);
+  const style=BOT_STYLES.find(s=>s.id===(document.getElementById(stId)||{value:'balanced'}).value)||BOT_STYLES[0];
+  C3.sf.postMessage('position fen '+C3.game.fen());
+  C3.sf.postMessage('setoption name Skill Level value '+lv);
+  C3.sf.postMessage('setoption name Contempt value '+style.contempt);
+  C3.sf.postMessage('go depth 13');
+}
+function wireUI(){
+  const get=id=>document.getElementById(id);
+  const wire=(id,fn)=>{const el=get(id);if(el)el.onchange=fn;};
+  wire('c3d-mode',e=>{C3.mode=e.target.value;const isCvC=C3.mode==='comp-vs-comp';get('c3d-engine-row')&&(get('c3d-engine-row').style.display=['play','comp-vs-comp'].includes(C3.mode)?'flex':'none');get('c3d-white-engine-row')&&(get('c3d-white-engine-row').style.display=isCvC?'flex':'none');get('c3d-black-engine-row')&&(get('c3d-black-engine-row').style.display=isCvC?'flex':'none');get('c3d-friend-row')&&(get('c3d-friend-row').style.display=C3.mode==='friend'?'':'none');if(get('c3d-status'))get('c3d-status').textContent=C3.mode.toUpperCase().replace(/-/g,' ');syncPieces();});
+  wire('c3d-board',e=>{C3.boardTheme=e.target.value;buildBoard();syncPieces();});
+  wire('c3d-piece',e=>{C3.pieceStyle=e.target.value;Object.values(C3.pieces).forEach(p=>C3.scene.remove(p.mesh));C3.pieces={};syncPieces();});
+  wire('c3d-bg',e=>{C3.bgStyle=e.target.value;const bg=BACKGROUNDS[C3.bgStyle]||0x080812;C3.scene.background=new THREE.Color(bg);C3.scene.fog=new THREE.FogExp2(bg,0.018);});
+  wire('c3d-glare',e=>{C3.glareColor=e.target.value;updateGlare();});
+  wire('c3d-view',e=>{const is2d=e.target.value==='2d';const brd2d=get('c3d-board2d-wrap');if(brd2d)brd2d.style.display=is2d?'flex':'none';if(C3.renderer)C3.renderer.domElement.style.display=is2d?'none':'block';if(is2d)update2D();});
+  wire('c3d-sound',e=>{C3.soundOn=e.target.value==='true';});
+  wire('c3d-anim',e=>{C3.animOn=e.target.value==='true';});
+  wire('c3d-autorotate',e=>{C3.autoRotate=e.target.value==='true';});
+  wire('c3d-side',e=>{C3.userColor=e.target.value;C3.tTheta=C3.userColor==='w'?Math.PI/2:-Math.PI/2;});
+  wire('c3d-coords',e=>{setCoordVis(e.target.value==='true');});
+  wire('c3d-level',sendToEngine);wire('c3d-style',e=>{const sty=BOT_STYLES.find(s=>s.id===e.target.value);if(sty&&get('c3d-style-desc'))get('c3d-style-desc').textContent=sty.desc;sendToEngine();});
+  wire('c3d-level-w',sendToEngine);wire('c3d-style-w',sendToEngine);wire('c3d-level-b',sendToEngine);wire('c3d-style-b',sendToEngine);
+  const btn=(id,fn)=>{const el=get(id);if(el)el.onclick=fn;};
+  btn('c3d-btn-eval',()=>{C3.evalVisible=!C3.evalVisible;const ew=get('c3d-eval-wrap');if(ew)ew.style.display=C3.evalVisible?'':'none';get('c3d-btn-eval').textContent=C3.evalVisible?'Hide Eval':'Show Eval';});
+  btn('c3d-btn-bm',()=>{C3.bestMoveOn=!C3.bestMoveOn;const bmw=get('c3d-bm-wrap');if(bmw)bmw.style.display=C3.bestMoveOn?'':'none';get('c3d-btn-bm').textContent=C3.bestMoveOn?'Hide Best':'Show Best';});
+  btn('c3d-btn-settings',()=>{const sp=get('c3d-settings-panel');if(!sp)return;const vis=sp.style.display!=='none';sp.style.display=vis?'none':'';get('c3d-btn-settings').textContent=vis?'⚙ Settings':'✕ Settings';});
+  btn('c3d-btn-hide-panel',()=>{const sb=get('c3d-sidebar');if(!sb)return;const h=sb.style.display==='none';sb.style.display=h?'':'none';get('c3d-btn-hide-panel').textContent=h?'◀ Hide':'▶ Show';});
+  btn('c3d-btn-undo',()=>{C3.game.undo();if(C3.mode==='play')C3.game.undo();Object.values(C3.pieces).forEach(p=>C3.scene.remove(p.mesh));C3.pieces={};syncPieces();});
+  btn('c3d-btn-reset',()=>{C3.game.reset();C3.selectedSq=null;Object.values(C3.pieces).forEach(p=>C3.scene.remove(p.mesh));C3.pieces={};syncPieces();});
+  btn('c3d-btn-recenter',()=>{C3.tTheta=C3.userColor==='w'?Math.PI/2:-Math.PI/2;C3.tPhi=Math.PI/3.5;C3.radius=14;});
+  btn('c3d-btn-flip',()=>{C3.tTheta+=Math.PI;const b2=get('c3d-board2d');if(b2)b2.style.transform=b2.style.transform==='rotate(180deg)'?'':'rotate(180deg)';});
+  btn('c3d-btn-freeze',()=>{C3.cameraFrozen=!C3.cameraFrozen;const fb=get('c3d-btn-freeze');if(fb){fb.textContent=C3.cameraFrozen?'🔓 Unfreeze Cam':'🔒 Freeze Cam';fb.style.background=C3.cameraFrozen?'rgba(59,130,246,.25)':'';} });
+  btn('c3d-btn-pgn',()=>{const ta=document.createElement('textarea');ta.value=C3.game.pgn()||'No moves yet';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);const b=get('c3d-btn-pgn');const o=b.textContent;b.textContent='✓ Copied!';setTimeout(()=>b.textContent=o,1500);});
+  btn('c3d-btn-movelist',()=>{const ml=get('c3d-movelist-wrap');if(!ml)return;const v=ml.style.display!=='none';ml.style.display=v?'none':'';get('c3d-btn-movelist').textContent=v?'Show Moves':'Hide Moves';});
+}
+function setupInteraction(el){
+  let mouseDown=false,mouseMoved=false;
+  const onMouseDown=e=>{mouseDown=true;mouseMoved=false;C3.startMouse={x:e.clientX,y:e.clientY};C3.prevMouse={x:e.clientX,y:e.clientY};if(!AudioCtx2.ctx){try{AudioCtx2.ctx=new(window.AudioContext||window.webkitAudioContext)();}catch(ex){}}};
+  const onMouseMove=e=>{if(!mouseDown)return;if(Math.abs(e.clientX-C3.startMouse.x)>5||Math.abs(e.clientY-C3.startMouse.y)>5)mouseMoved=true;C3.tTheta-=(e.clientX-C3.prevMouse.x)*0.007;C3.tPhi=Math.max(0.08,Math.min(Math.PI/2-0.05,C3.tPhi+(e.clientY-C3.prevMouse.y)*0.007));C3.prevMouse={x:e.clientX,y:e.clientY};};
+  const onMouseUp=e=>{if(mouseDown&&!mouseMoved){const rc=el.getBoundingClientRect();C3.mouse.x=((e.clientX-rc.left)/rc.width)*2-1;C3.mouse.y=-((e.clientY-rc.top)/rc.height)*2+1;C3.raycaster.setFromCamera(C3.mouse,C3.camera);doRaycast();}mouseDown=false;mouseMoved=false;};
+  const onTouchStart=e=>{if(!AudioCtx2.ctx){try{AudioCtx2.ctx=new(window.AudioContext||window.webkitAudioContext)();}catch(ex){}}if(e.touches.length===2){C3.pinchDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);C3.touchId=-1;return;}if(e.touches.length===1){const t=e.touches[0];C3.touchId=t.identifier;C3.touchX0=t.clientX;C3.touchY0=t.clientY;C3.touchMoved=false;C3.prevMouse={x:t.clientX,y:t.clientY};}e.preventDefault();};
+  const onTouchMove=e=>{if(e.touches.length===2){const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);C3.radius=Math.max(5,Math.min(28,C3.radius-(d-C3.pinchDist)*0.05));C3.pinchDist=d;e.preventDefault();return;}const t=Array.from(e.changedTouches).find(t2=>t2.identifier===C3.touchId);if(!t)return;if(Math.abs(t.clientX-C3.touchX0)>22||Math.abs(t.clientY-C3.touchY0)>22)C3.touchMoved=true;C3.tTheta-=(t.clientX-C3.prevMouse.x)*0.007;C3.tPhi=Math.max(0.08,Math.min(Math.PI/2-0.05,C3.tPhi+(t.clientY-C3.prevMouse.y)*0.007));C3.prevMouse={x:t.clientX,y:t.clientY};e.preventDefault();};
+  const onTouchEnd=e=>{const t=Array.from(e.changedTouches).find(t2=>t2.identifier===C3.touchId);if(!t){C3.touchId=-1;return;}if(!C3.touchMoved){const rc=el.getBoundingClientRect();C3.mouse.x=((t.clientX-rc.left)/rc.width)*2-1;C3.mouse.y=-((t.clientY-rc.top)/rc.height)*2+1;C3.raycaster.setFromCamera(C3.mouse,C3.camera);doRaycast();}C3.touchId=-1;C3.touchMoved=false;};
+  el.addEventListener('mousedown',onMouseDown);window.addEventListener('mousemove',onMouseMove);window.addEventListener('mouseup',onMouseUp);
+  el.addEventListener('touchstart',onTouchStart,{passive:false});el.addEventListener('touchmove',onTouchMove,{passive:false});el.addEventListener('touchend',onTouchEnd,{passive:false});window.addEventListener('touchend',onTouchEnd,{passive:false});
+  el.addEventListener('wheel',e=>{C3.radius=Math.max(5,Math.min(28,C3.radius+e.deltaY*0.012));e.preventDefault();},{passive:false});
+  window.addEventListener('resize',()=>{const r=document.getElementById('c3d-root');if(!r||!C3.renderer)return;C3.renderer.setSize(r.clientWidth,r.clientHeight);C3.camera.aspect=r.clientWidth/r.clientHeight;C3.camera.updateProjectionMatrix();});
+}
+function animate(){requestAnimationFrame(animate);C3.theta+=(C3.tTheta-C3.theta)*0.1;C3.phi+=(C3.tPhi-C3.phi)*0.1;updateCamera();C3.renderer.render(C3.scene,C3.camera);}
+function init(){
+  C3.game=new Chess();
+  const root=document.getElementById('c3d-root');if(!root)return;
+  C3.scene=new THREE.Scene();const bg=BACKGROUNDS[C3.bgStyle]||0x080812;C3.scene.background=new THREE.Color(bg);C3.scene.fog=new THREE.FogExp2(bg,0.018);
+  C3.camera=new THREE.PerspectiveCamera(42,root.clientWidth/root.clientHeight,0.1,1000);updateCamera();
+  C3.renderer=new THREE.WebGLRenderer({antialias:true});C3.renderer.setSize(root.clientWidth,root.clientHeight);C3.renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));C3.renderer.shadowMap.enabled=true;C3.renderer.shadowMap.type=THREE.PCFSoftShadowMap;C3.renderer.toneMapping=THREE.ACESFilmicToneMapping;C3.renderer.toneMappingExposure=1.1;root.appendChild(C3.renderer.domElement);
+  C3.raycaster=new THREE.Raycaster();
+  C3.scene.add(new THREE.AmbientLight(0xffffff,0.45));const sun=new THREE.DirectionalLight(0xffffff,0.9);sun.position.set(8,16,8);sun.castShadow=true;sun.shadow.mapSize.width=2048;sun.shadow.mapSize.height=2048;sun.shadow.bias=-0.001;C3.scene.add(sun);const fill=new THREE.DirectionalLight(0x8888ff,0.3);fill.position.set(-8,6,-8);C3.scene.add(fill);C3.rimLight=new THREE.PointLight(0x3b82f6,2.2,35);C3.rimLight.position.set(-10,9,-10);C3.scene.add(C3.rimLight);updateGlare();
+  buildBoard();syncPieces();setupInteraction(C3.renderer.domElement);animate();initEngine();wireUI();
+}
+window.chess3dInit=function(){if(C3.started)return;C3.started=true;init();};
 })();
 </script>
-</body></html>
