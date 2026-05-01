@@ -1658,6 +1658,7 @@ if(_fbReady && _auth){
       </div>
       <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
         <button class="btn btn-green btn-lg" onclick="obFinish()">&#9822; Start Playing!</button>
+        <button class="btn btn-primary btn-sm" onclick="obFinish();setTimeout(function(){if(typeof startTour==='function')startTour();},300)" style="font-size:12px">&#128506; Take a Tour</button>
         <button class="btn btn-ghost btn-sm" onclick="obSkip()" style="font-size:12px;opacity:0.7">Skip Setup &#8599;</button>
       </div>
     </div>
@@ -1684,6 +1685,7 @@ if(_fbReady && _auth){
         <button class="btn btn-ghost btn-lg" onclick="navTo('puzzles')">&#129513; Puzzles</button>
         <button class="btn btn-ghost btn-lg" onclick="navTo('analysis')">&#128269; Analysis</button>
         <button class="btn btn-ghost btn-lg" onclick="navTo('learn')">&#127891; Learn</button>
+        <button class="btn btn-ghost btn-lg" onclick="startTour()" style="background:linear-gradient(135deg,rgba(251,191,36,.12),rgba(139,92,246,.12));border-color:rgba(251,191,36,.35)">&#128506; Tour</button>
       </div>
       <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px;margin-bottom:4px">
         <button class="btn btn-ghost btn-lg" onclick="navTo('annotated')">📚 GM Games</button>
@@ -6044,11 +6046,318 @@ function searchPlayer(){
           <button class="btn btn-ghost btn-sm" onclick="loadCCRecentGames('${u}')" id="cc-recent-btn">&#128336; Recent (30 days)</button>
         <a href="https://www.chess.com/member/${u}" data-parental-link="chess.com" target="_blank" class="btn btn-ghost btn-sm">Chess.com &#8599;</a>
         <button class="btn btn-ghost btn-sm" onclick="analyzeAccount('${u}')" style="background:linear-gradient(135deg,var(--accent),#8b5cf6);color:#fff;border:none">&#128202; Analyze Account</button>
+        <button class="btn btn-ghost btn-sm" onclick="ccFullAnalysis('${u}')" style="background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none">&#128200; Full Game History</button>
+        <button class="btn btn-ghost btn-sm" onclick="ccOpeningAnalysis('${u}')" style="background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none">&#9822; Opening Analysis</button>
       </div>
       <div id="cc-account-stats"></div>
+      <div id="cc-full-analysis"></div>
+      <div id="cc-opening-analysis"></div>
       <div id="cc-games-list"></div>
     </div>`;
   }).catch(()=>{if(el)el.innerHTML='<p style="color:var(--red)">Player not found on Chess.com</p>';});
+}
+
+
+// ── Chess.com Full Game History Analysis ─────────────────────────────
+async function ccFullAnalysis(username){
+  const el=document.getElementById('cc-full-analysis');
+  if(!el) return;
+  el.innerHTML='<div class="spinner" style="margin:16px auto;display:block"></div><p style="text-align:center;color:var(--text2);font-size:12px">Loading all archives... this may take a moment.</p>';
+
+  try {
+    // 1. Get all monthly archives
+    const archivesResp = await fetch(`https://api.chess.com/pub/player/${username}/games/archives`);
+    const archivesData = await archivesResp.json();
+    const archives = archivesData.archives || [];
+
+    if(!archives.length){
+      el.innerHTML='<p style="color:var(--text2)">No game archives found for '+username+'.</p>';
+      return;
+    }
+
+    el.innerHTML='<p style="color:var(--text2);font-size:12px;text-align:center">Loading '+archives.length+' monthly archives...</p>';
+
+    // 2. Fetch all archives (respect Chess.com public API — no auth needed)
+    let totalGames=0, wins=0, losses=0, draws=0;
+    let winStreak=0, lossStreak=0, curWin=0, curLoss=0;
+    let ratingHistory=[];
+    const timeClassStats={bullet:{w:0,l:0,d:0,total:0},blitz:{w:0,l:0,d:0,total:0},rapid:{w:0,l:0,d:0,total:0},daily:{w:0,l:0,d:0,total:0}};
+    const uname=username.toLowerCase();
+
+    for(let i=0;i<archives.length;i++){
+      el.querySelector('p').textContent='Loading archive '+(i+1)+' of '+archives.length+'...';
+      try{
+        const resp=await fetch(archives[i]);
+        const data=await resp.json();
+        const games=data.games||[];
+        for(const g of games){
+          totalGames++;
+          const tc=(g.time_class||'blitz').toLowerCase();
+          const isWhite=g.white&&g.white.username&&g.white.username.toLowerCase()===uname;
+          const side=isWhite?g.white:g.black;
+          const result=side?side.result:'';
+          const rating=side?side.rating:null;
+          if(rating) ratingHistory.push({date:g.end_time||0,rating});
+          if(['win'].includes(result)){wins++;curWin++;curLoss=0;if(curWin>winStreak)winStreak=curWin;}
+          else if(['checkmated','timeout','resigned','lose','abandoned'].includes(result)){losses++;curLoss++;curWin=0;if(curLoss>lossStreak)lossStreak=curLoss;}
+          else{draws++;curWin=0;curLoss=0;}
+          if(timeClassStats[tc]){
+            timeClassStats[tc].total++;
+            if(['win'].includes(result)) timeClassStats[tc].w++;
+            else if(['checkmated','timeout','resigned','lose','abandoned'].includes(result)) timeClassStats[tc].l++;
+            else timeClassStats[tc].d++;
+          }
+        }
+      }catch(e){/* skip failed archive */}
+    }
+
+    const pct=(n,t)=>t?Math.round(n/t*100):'0';
+    const ratingsSorted=ratingHistory.sort((a,b)=>a.date-b.date);
+    const peakRating=ratingHistory.length?Math.max(...ratingHistory.map(r=>r.rating)):0;
+    const latestRating=ratingsSorted.length?ratingsSorted[ratingsSorted.length-1].rating:0;
+    const earliestRating=ratingsSorted.length?ratingsSorted[0].rating:0;
+
+    const tcRows=Object.entries(timeClassStats)
+      .filter(([,v])=>v.total>0)
+      .map(([k,v])=>`<tr><td style="padding:4px 8px;text-transform:capitalize;color:var(--text2)">${k}</td><td style="padding:4px 8px;color:#22c55e">${v.w}</td><td style="padding:4px 8px;color:#ef4444">${v.l}</td><td style="padding:4px 8px;color:#94a3b8">${v.d}</td><td style="padding:4px 8px">${v.total}</td><td style="padding:4px 8px;color:#fbbf24">${pct(v.w,v.total)}%</td></tr>`)
+      .join('');
+
+    el.innerHTML=`
+      <div style="margin:16px 0;padding:16px;background:var(--bg3);border-radius:10px;border:1px solid var(--border)">
+        <h3 style="margin:0 0 14px;font-size:15px">&#128200; Full Game History — ${username}</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px">
+          <div style="text-align:center;padding:10px;background:var(--bg2);border-radius:8px">
+            <div style="font-size:22px;font-weight:800;color:var(--text)">${totalGames.toLocaleString()}</div>
+            <div style="font-size:11px;color:var(--text2)">Total Games</div>
+          </div>
+          <div style="text-align:center;padding:10px;background:var(--bg2);border-radius:8px">
+            <div style="font-size:22px;font-weight:800;color:#22c55e">${wins.toLocaleString()}</div>
+            <div style="font-size:11px;color:var(--text2)">Wins (${pct(wins,totalGames)}%)</div>
+          </div>
+          <div style="text-align:center;padding:10px;background:var(--bg2);border-radius:8px">
+            <div style="font-size:22px;font-weight:800;color:#ef4444">${losses.toLocaleString()}</div>
+            <div style="font-size:11px;color:var(--text2)">Losses (${pct(losses,totalGames)}%)</div>
+          </div>
+          <div style="text-align:center;padding:10px;background:var(--bg2);border-radius:8px">
+            <div style="font-size:22px;font-weight:800;color:#94a3b8">${draws.toLocaleString()}</div>
+            <div style="font-size:11px;color:var(--text2)">Draws (${pct(draws,totalGames)}%)</div>
+          </div>
+          <div style="text-align:center;padding:10px;background:var(--bg2);border-radius:8px">
+            <div style="font-size:22px;font-weight:800;color:#fbbf24">${peakRating||'—'}</div>
+            <div style="font-size:11px;color:var(--text2)">Peak Rating</div>
+          </div>
+          <div style="text-align:center;padding:10px;background:var(--bg2);border-radius:8px">
+            <div style="font-size:22px;font-weight:800;color:var(--accent)">${winStreak}</div>
+            <div style="font-size:11px;color:var(--text2)">Best Win Streak</div>
+          </div>
+        </div>
+        <p style="font-size:12px;color:var(--text2);margin:0 0 10px">Rating journey: ${earliestRating} &#8594; ${latestRating} (peak: ${peakRating})</p>
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr style="background:var(--bg2)">
+            <th style="padding:5px 8px;text-align:left;color:var(--text2)">Format</th>
+            <th style="padding:5px 8px;color:#22c55e">W</th>
+            <th style="padding:5px 8px;color:#ef4444">L</th>
+            <th style="padding:5px 8px;color:#94a3b8">D</th>
+            <th style="padding:5px 8px">Total</th>
+            <th style="padding:5px 8px;color:#fbbf24">Win%</th>
+          </tr></thead>
+          <tbody>${tcRows}</tbody>
+        </table>
+      </div>`;
+  } catch(e){
+    if(el) el.innerHTML='<p style="color:#ef4444;font-size:13px">Error: '+e.message+'</p>';
+  }
+}
+
+// ── Chess.com Opening Analysis ────────────────────────────────────────
+async function ccOpeningAnalysis(username){
+  const el=document.getElementById('cc-opening-analysis');
+  if(!el) return;
+  el.innerHTML='<div class="spinner" style="margin:16px auto;display:block"></div><p style="text-align:center;color:var(--text2);font-size:12px">Analyzing openings from recent games (up to 500 games)...</p>';
+  try{
+    // Get last few months of archives for opening analysis
+    const archivesResp=await fetch(`https://api.chess.com/pub/player/${username}/games/archives`);
+    const archivesData=await archivesResp.json();
+    const archives=(archivesData.archives||[]).slice(-4); // last 4 months ~500 games
+    const uname=username.toLowerCase();
+    const openings={};
+    let totalProcessed=0;
+
+    for(const archive of archives){
+      const resp=await fetch(archive);
+      const data=await resp.json();
+      for(const g of data.games||[]){
+        if(totalProcessed>=500) break;
+        if(g.rules!=='chess') continue;
+        const isWhite=g.white&&g.white.username&&g.white.username.toLowerCase()===uname;
+        const side=isWhite?g.white:g.black;
+        const result=side?side.result:'';
+        const isWin=['win'].includes(result);
+        const isLoss=['checkmated','timeout','resigned','lose','abandoned'].includes(result);
+        const isDraw=!isWin&&!isLoss;
+        // Extract opening from PGN ECO header or first moves
+        let opening='Unknown';
+        if(g.pgn){
+          const ecoM=g.pgn.match(/\[ECOUrl "([^"]+)"\]/);
+          if(ecoM) opening=ecoM[1].split('/').pop().replace(/-/g,' ');
+          else {
+            const openingM=g.pgn.match(/\[Opening "([^"]+)"\]/);
+            if(openingM) opening=openingM[1];
+          }
+        }
+        if(!openings[opening]) openings[opening]={w:0,l:0,d:0,total:0,tc:g.time_class||'blitz'};
+        openings[opening].total++;
+        if(isWin) openings[opening].w++;
+        else if(isLoss) openings[opening].l++;
+        else openings[opening].d++;
+        totalProcessed++;
+      }
+      if(totalProcessed>=500) break;
+    }
+
+    const sorted=Object.entries(openings)
+      .sort((a,b)=>b[1].total-a[1].total)
+      .slice(0,30);
+
+    if(!sorted.length){
+      el.innerHTML='<p style="color:var(--text2)">No opening data found. Make sure games have PGN data.</p>';
+      return;
+    }
+
+    const pct=(n,t)=>t?Math.round(n/t*100):0;
+    const score=(v)=>((v.w+v.d*0.5)/v.total*100).toFixed(1);
+
+    const rows=sorted.map(([name,v])=>{
+      const sc=parseFloat(score(v));
+      const scoreColor=sc>=55?'#22c55e':sc<=45?'#ef4444':'#94a3b8';
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:5px 8px;font-size:12px;color:var(--text);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${name}">${name}</td>
+        <td style="padding:5px 8px;font-size:12px;color:#22c55e;text-align:center">${v.w}</td>
+        <td style="padding:5px 8px;font-size:12px;color:#ef4444;text-align:center">${v.l}</td>
+        <td style="padding:5px 8px;font-size:12px;color:#94a3b8;text-align:center">${v.d}</td>
+        <td style="padding:5px 8px;font-size:12px;text-align:center">${v.total}</td>
+        <td style="padding:5px 8px;font-size:13px;font-weight:700;color:${scoreColor};text-align:center">${sc}%</td>
+      </tr>`;
+    }).join('');
+
+    el.innerHTML=`
+      <div style="margin:16px 0;padding:16px;background:var(--bg3);border-radius:10px;border:1px solid var(--border)">
+        <h3 style="margin:0 0 6px;font-size:15px">&#9822; Opening Analysis — ${username}</h3>
+        <p style="margin:0 0 12px;font-size:12px;color:var(--text2)">Based on ${totalProcessed} recent games · Score = (wins + draws×0.5) / total × 100</p>
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:var(--bg2)">
+            <th style="padding:5px 8px;text-align:left;font-size:11px;color:var(--text2)">Opening</th>
+            <th style="padding:5px 8px;font-size:11px;color:#22c55e">W</th>
+            <th style="padding:5px 8px;font-size:11px;color:#ef4444">L</th>
+            <th style="padding:5px 8px;font-size:11px;color:#94a3b8">D</th>
+            <th style="padding:5px 8px;font-size:11px">Games</th>
+            <th style="padding:5px 8px;font-size:11px;color:#fbbf24">Score%</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }catch(e){
+    if(el) el.innerHTML='<p style="color:#ef4444;font-size:13px">Error: '+e.message+'</p>';
+  }
+}
+
+// ── Lichess Full Game History Analysis ───────────────────────────────
+async function lichessFullAnalysis(username){
+  const el=document.getElementById('li-full-analysis');
+  if(!el) return;
+  el.innerHTML='<div class="spinner" style="margin:16px auto;display:block"></div><p style="text-align:center;color:var(--text2);font-size:12px">Loading Lichess game history (up to 1000 games)...</p>';
+  try{
+    // Lichess API — ndjson stream of games
+    const resp=await fetch(`https://lichess.org/api/games/user/${username}?max=1000&opening=true&clocks=false&evals=false`,{
+      headers:{Accept:'application/x-ndjson'}
+    });
+    const text=await resp.text();
+    const games=text.trim().split('\n').filter(l=>l).map(l=>{try{return JSON.parse(l);}catch(e){return null;}}).filter(Boolean);
+
+    if(!games.length){
+      el.innerHTML='<p style="color:var(--text2)">No games found for '+username+' on Lichess.</p>';
+      return;
+    }
+
+    const uname=username.toLowerCase();
+    let wins=0,losses=0,draws=0;
+    let winStreak=0,lossStreak=0,curW=0,curL=0;
+    const tcStats={bullet:{w:0,l:0,d:0,t:0},blitz:{w:0,l:0,d:0,t:0},rapid:{w:0,l:0,d:0,t:0},classical:{w:0,l:0,d:0,t:0}};
+    let peakRating=0;
+
+    for(const g of games){
+      const isWhite=g.players&&g.players.white&&g.players.white.user&&g.players.white.user.name&&g.players.white.user.name.toLowerCase()===uname;
+      const mySide=isWhite?'white':'black';
+      const winner=g.winner;
+      const rating=g.players&&g.players[mySide]&&g.players[mySide].rating;
+      if(rating&&rating>peakRating) peakRating=rating;
+      const tc=(g.perf||'blitz').toLowerCase();
+      const isWin=(winner===mySide);
+      const isLoss=(winner&&winner!==mySide);
+      const isDraw=!winner&&g.status!=='started';
+      if(isWin){wins++;curW++;curL=0;if(curW>winStreak)winStreak=curW;}
+      else if(isLoss){losses++;curL++;curW=0;if(curL>lossStreak)lossStreak=curL;}
+      else if(isDraw){draws++;curW=0;curL=0;}
+      if(tcStats[tc]){tcStats[tc].t++;if(isWin)tcStats[tc].w++;else if(isLoss)tcStats[tc].l++;else if(isDraw)tcStats[tc].d++;}
+    }
+
+    const total=games.length;
+    const pct=(n,t)=>t?Math.round(n/t*100):'0';
+    const tcRows=Object.entries(tcStats).filter(([,v])=>v.t>0).map(([k,v])=>
+      `<tr><td style="padding:4px 8px;text-transform:capitalize;color:var(--text2)">${k}</td><td style="padding:4px 8px;color:#22c55e">${v.w}</td><td style="padding:4px 8px;color:#ef4444">${v.l}</td><td style="padding:4px 8px;color:#94a3b8">${v.d}</td><td style="padding:4px 8px">${v.t}</td><td style="padding:4px 8px;color:#fbbf24">${pct(v.w,v.t)}%</td></tr>`
+    ).join('');
+
+    el.innerHTML=`<div style="margin:16px 0;padding:16px;background:var(--bg3);border-radius:10px;border:1px solid var(--border)">
+      <h3 style="margin:0 0 14px;font-size:15px">&#128200; Lichess Game History — ${username}</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:14px">
+        <div style="text-align:center;padding:10px;background:var(--bg2);border-radius:8px"><div style="font-size:20px;font-weight:800">${total.toLocaleString()}</div><div style="font-size:11px;color:var(--text2)">Games</div></div>
+        <div style="text-align:center;padding:10px;background:var(--bg2);border-radius:8px"><div style="font-size:20px;font-weight:800;color:#22c55e">${wins}</div><div style="font-size:11px;color:var(--text2)">Wins ${pct(wins,total)}%</div></div>
+        <div style="text-align:center;padding:10px;background:var(--bg2);border-radius:8px"><div style="font-size:20px;font-weight:800;color:#ef4444">${losses}</div><div style="font-size:11px;color:var(--text2)">Losses ${pct(losses,total)}%</div></div>
+        <div style="text-align:center;padding:10px;background:var(--bg2);border-radius:8px"><div style="font-size:20px;font-weight:800;color:#94a3b8">${draws}</div><div style="font-size:11px;color:var(--text2)">Draws ${pct(draws,total)}%</div></div>
+        <div style="text-align:center;padding:10px;background:var(--bg2);border-radius:8px"><div style="font-size:20px;font-weight:800;color:#fbbf24">${peakRating||'—'}</div><div style="font-size:11px;color:var(--text2)">Peak Rating</div></div>
+        <div style="text-align:center;padding:10px;background:var(--bg2);border-radius:8px"><div style="font-size:20px;font-weight:800;color:var(--accent)">${winStreak}</div><div style="font-size:11px;color:var(--text2)">Best Streak</div></div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--bg2)"><th style="padding:5px 8px;text-align:left;color:var(--text2)">Format</th><th style="padding:5px 8px;color:#22c55e">W</th><th style="padding:5px 8px;color:#ef4444">L</th><th style="padding:5px 8px;color:#94a3b8">D</th><th style="padding:5px 8px">Total</th><th style="padding:5px 8px;color:#fbbf24">Win%</th></tr></thead><tbody>${tcRows}</tbody></table>
+    </div>`;
+  }catch(e){if(el) el.innerHTML='<p style="color:#ef4444;font-size:13px">Error: '+e.message+'</p>';}
+}
+
+// ── Lichess Opening Analysis ──────────────────────────────────────────
+async function lichessOpeningAnalysis(username){
+  const el=document.getElementById('li-opening-analysis');
+  if(!el) return;
+  el.innerHTML='<div class="spinner" style="margin:16px auto;display:block"></div><p style="text-align:center;color:var(--text2);font-size:12px">Analyzing Lichess openings (up to 500 games with opening data)...</p>';
+  try{
+    const resp=await fetch(`https://lichess.org/api/games/user/${username}?max=500&opening=true&clocks=false&evals=false`,{
+      headers:{Accept:'application/x-ndjson'}
+    });
+    const text=await resp.text();
+    const games=text.trim().split('\n').filter(l=>l).map(l=>{try{return JSON.parse(l);}catch(e){return null;}}).filter(Boolean);
+    const uname=username.toLowerCase();
+    const openings={};
+    for(const g of games){
+      const openingName=(g.opening&&g.opening.name)||'Unknown';
+      const isWhite=g.players&&g.players.white&&g.players.white.user&&g.players.white.user.name&&g.players.white.user.name.toLowerCase()===uname;
+      const mySide=isWhite?'white':'black';
+      const winner=g.winner;
+      const isWin=winner===mySide;
+      const isLoss=winner&&winner!==mySide;
+      if(!openings[openingName]) openings[openingName]={w:0,l:0,d:0,total:0};
+      openings[openingName].total++;
+      if(isWin) openings[openingName].w++;
+      else if(isLoss) openings[openingName].l++;
+      else openings[openingName].d++;
+    }
+    const sorted=Object.entries(openings).filter(([,v])=>v.total>=2).sort((a,b)=>b[1].total-a[1].total).slice(0,30);
+    if(!sorted.length){el.innerHTML='<p style="color:var(--text2)">Not enough opening data found.</p>';return;}
+    const score=(v)=>((v.w+v.d*0.5)/v.total*100).toFixed(1);
+    const rows=sorted.map(([name,v])=>{
+      const sc=parseFloat(score(v));
+      const col=sc>=55?'#22c55e':sc<=45?'#ef4444':'#94a3b8';
+      return `<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${name}">${name}</td><td style="padding:5px 8px;font-size:12px;color:#22c55e;text-align:center">${v.w}</td><td style="padding:5px 8px;font-size:12px;color:#ef4444;text-align:center">${v.l}</td><td style="padding:5px 8px;font-size:12px;color:#94a3b8;text-align:center">${v.d}</td><td style="padding:5px 8px;font-size:12px;text-align:center">${v.total}</td><td style="padding:5px 8px;font-size:13px;font-weight:700;color:${col};text-align:center">${sc}%</td></tr>`;
+    }).join('');
+    el.innerHTML=`<div style="margin:16px 0;padding:16px;background:var(--bg3);border-radius:10px;border:1px solid var(--border)"><h3 style="margin:0 0 6px;font-size:15px">&#9822; Lichess Opening Analysis — ${username}</h3><p style="margin:0 0 12px;font-size:12px;color:var(--text2)">Based on ${games.length} games · Score% = (W + D×0.5) / total × 100</p><table style="width:100%;border-collapse:collapse"><thead><tr style="background:var(--bg2)"><th style="padding:5px 8px;text-align:left;font-size:11px;color:var(--text2)">Opening</th><th style="padding:5px 8px;font-size:11px;color:#22c55e">W</th><th style="padding:5px 8px;font-size:11px;color:#ef4444">L</th><th style="padding:5px 8px;font-size:11px;color:#94a3b8">D</th><th style="padding:5px 8px;font-size:11px">Games</th><th style="padding:5px 8px;font-size:11px;color:#fbbf24">Score%</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }catch(e){if(el) el.innerHTML='<p style="color:#ef4444;font-size:13px">Error: '+e.message+'</p>';}
 }
 function analyzeAccount(username){
   const el=document.getElementById('cc-account-stats');
@@ -17876,6 +18185,7 @@ function fbUploadPhotoFile(input){
 
 // ── PARENTAL CONTROLS ─────────────────────────────────────────────
 var _PARENTAL_PAGES = ['chat','forums','articles','players','events','music','tilted','feedback','bookreviews'];
+var _PARENTAL_SAFE_PAGES=_PARENTAL_PAGES.filter(function(p){return typeof p==='string'&&p.length>0;});
 var _PARENTAL_LABELS = {chat:'Messages/Chat',forums:'Forums',articles:'Articles',players:'Players',events:'Events',music:'Music Player',tilted:'Tilted? (Games)',feedback:'Feedback Page',bookreviews:'Book Reviews'};
 var _parentalState = null;
 
@@ -17885,6 +18195,43 @@ function parentalLoad(){
     _parentalState=s?JSON.parse(s):null;
   }catch(e){_parentalState=null;}
   if(_parentalState&&_parentalState.enabled) parentalApply();
+  // Check Firebase for admin reset (async, non-blocking)
+  if(window._fb&&window._fb.user&&!window._fb.user.isAnonymous){
+    window._fb.user.getIdToken().then(function(tok){
+      fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+window._fb.user.uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
+        headers:{Authorization:'Bearer '+tok}
+      }).then(function(r){return r.json();}).then(function(data){
+        var f=data.fields||{};
+        var wasReset=f.parentalResetByAdmin&&f.parentalResetByAdmin.booleanValue;
+        if(wasReset){
+          // Admin cleared parental — wipe local state COMPLETELY
+          _parentalState=null;
+          try{localStorage.removeItem('c64_parental');}catch(e){}
+          // Un-hide all nav items immediately
+          if(typeof _PARENTAL_PAGES!=='undefined'){
+            _PARENTAL_PAGES.forEach(function(pg){
+              document.querySelectorAll('.nav-dd-item[data-page="'+pg+'"]').forEach(function(n){n.style.display='';});
+            });
+          }
+          showToast('Parental controls were reset by an admin.');
+          // Clear the flag in Firebase so it only fires once
+          window._fb.user.getIdToken().then(function(tok2){
+            fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+window._fb.user.uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=parentalResetByAdmin&updateMask.fieldPaths=parentalEnabled&updateMask.fieldPaths=parentalBlocked',{
+              method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok2},
+              body:JSON.stringify({fields:{parentalResetByAdmin:{booleanValue:false},parentalEnabled:{booleanValue:false},parentalBlocked:{stringValue:'{}'}}})
+            });
+          });
+        } else if(f.parentalEnabled&&f.parentalEnabled.booleanValue&&!_parentalState){
+          // Parental enabled in Firebase but not locally — sync from Firebase
+          var blocked={};
+          try{blocked=JSON.parse((f.parentalBlocked&&f.parentalBlocked.stringValue)||'{}');}catch(e){}
+          // Don't load the hash (security — PIN stays local)
+          _parentalState={enabled:true,blocked:blocked,hash:'',question:'',answerHash:''};
+          parentalApply();
+        }
+      }).catch(function(){});
+    }).catch(function(){});
+  }
 }
 
 function parentalApply(){
@@ -17904,7 +18251,7 @@ function parentalApply(){
     if(trigger) trigger.style.display='';
     if(player) player.style.display='';
   }
-  parentalBlockLinks();
+  // Note: parentalBlockLinks() is called separately with debounce to avoid freeze
 }
 
 // Patch navTo to block pages
@@ -17924,7 +18271,7 @@ function parentalApply(){
 
 function parentalShowSetup(){
   var existing=document.getElementById('parental-modal');
-  if(existing){existing.style.display='flex';parentalRefreshUI();return;}
+  if(existing) existing.remove();
   var modal=document.createElement('div');
   modal.id='parental-modal';
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px';
@@ -17947,16 +18294,20 @@ function parentalShowSetup(){
     +'</div>'
     +(state.enabled?'<div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0 4px"><span style="font-weight:700;font-size:13px">Block pages:</span><button onclick="parentalToggleAll()" style="font-size:10px;border:1px solid var(--border);background:none;color:var(--text2);padding:2px 8px;border-radius:4px;cursor:pointer">↕ Toggle All</button></div>':'')
     +(state.enabled?'<div style="margin-bottom:12px"><div style="font-weight:700;font-size:13px;margin-bottom:8px">Blocked Pages:</div>'
-    +_PARENTAL_PAGES.map(function(page){
-      var isBlocked=blocked[page]?true:false;
-      var labels={chat:'Messages/Chat',forums:'Forums',articles:'Articles',players:'Players',events:'Events',music:'Music Player',feedback:'Feedback Page',bookreviews:'Book Reviews',tilted:'Tilted? (Game)'};
-      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">'
-        +'<span style="font-size:13px">'+labels[page]+'</span>'
-        +'<div style="width:36px;height:20px;border-radius:10px;background:'+(isBlocked?'var(--accent)':'#555')+';cursor:pointer;position:relative;transition:background .2s" '
-        +'onclick="parentalTogglePage(\''+page+'\',this)" data-page="'+page+'">'
-        +'<div style="position:absolute;top:2px;'+(isBlocked?'left:18px':'left:2px')+';width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s"></div>'
-        +'</div></div>';
-    }).join('')+'</div>':'')
+    +(function(){
+      var labels={chat:'Messages/Chat',forums:'Forums',articles:'Articles',players:'Players',events:'Events',music:'Music Player',feedback:'Feedback Page',bookreviews:'Book Reviews',tilted:'Tilted? (Games)'};
+      return _PARENTAL_PAGES.filter(function(p){return typeof p==='string'&&p.length>0;}).map(function(page){
+        var isBlocked=blocked[page]?true:false;
+        var label=labels[page]||page;
+        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">'
+          +'<span style="font-size:13px">'+label+'</span>'
+          +'<div id="ptog-'+page+'" style="width:36px;height:20px;border-radius:10px;background:'+(isBlocked?'var(--accent)':'#555')+';cursor:pointer;position:relative;transition:background .2s" '
+          +'onclick="parentalTogglePage(\''+page+'\',this)" data-page="'+page+'">'
+          +'<div style="position:absolute;top:2px;'+(isBlocked?'left:18px':'left:2px')+';width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s"></div>'
+          +'</div></div>';
+      }).join('');
+    })()
+    +'</div>':'')
     +'<div id="parental-form-area"></div>'
     +'<hr style="margin:16px 0;border-color:var(--border)">'
     +'<div style="margin-bottom:10px">'
@@ -17976,28 +18327,45 @@ function parentalShowSetup(){
 
 async function parentalTogglePage(page, el){
   if(!_parentalState||!_parentalState.enabled) return;
-  var code=prompt('Enter parental control code to modify settings:');
+  var code=prompt('Enter PIN to change setting:');
   if(!code) return;
+  // Show instant feedback that we're processing
+  var origBg=el.style.background;
+  el.style.opacity='0.5';
   _hashStr(code).then(function(hash){
-  if(hash!==_parentalState.hash){showToast('Wrong code.');return;}
-  _parentalState.blocked[page]=!_parentalState.blocked[page];
-  localStorage.setItem('c64_parental',JSON.stringify(_parentalState));
-  parentalApply();
-  clearTimeout(window._pblTimer);
-  window._pblTimer=setTimeout(parentalBlockLinks,80);
-  el.style.background=_parentalState.blocked[page]?'var(--accent)':'#555';
-  el.querySelector('div').style.left=_parentalState.blocked[page]?'18px':'2px';
-  // Sync to Firebase
-  try{
-    if(window._fb&&window._fb.user&&!window._fb.user.isAnonymous){
-      window._fb.user.getIdToken().then(function(tok){
-        fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+window._fb.user.uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=parentalBlocked',{
-          method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
-          body:JSON.stringify({fields:{parentalBlocked:{stringValue:JSON.stringify(_parentalState.blocked||{})}}})
-        });
-      });
+    el.style.opacity='';
+    if(hash!==_parentalState.hash){showToast('Wrong PIN.');return;}
+    _parentalState.blocked[page]=!_parentalState.blocked[page];
+    localStorage.setItem('c64_parental',JSON.stringify(_parentalState));
+    // Update the toggle visually immediately via ID
+    var tog=document.getElementById('ptog-'+page);
+    if(tog){
+      var on=_parentalState.blocked[page];
+      tog.style.background=on?'var(--accent)':'#555';
+      var knob=tog.querySelector('div');
+      if(knob) knob.style.left=on?'18px':'2px';
     }
-  }catch(e){}
+    // Apply page visibility changes (fast, no link scan)
+    var blocked=_parentalState.blocked||{};
+    _PARENTAL_PAGES.forEach(function(pg){
+      document.querySelectorAll('.nav-dd-item[data-page="'+pg+'"]').forEach(function(n){
+        n.style.display=blocked[pg]?'none':'';
+      });
+    });
+    // Debounced link blocking (slow operation)
+    clearTimeout(window._pblTimer);
+    window._pblTimer=setTimeout(parentalBlockLinks,200);
+    // Async Firebase sync (non-blocking)
+    try{
+      if(window._fb&&window._fb.user&&!window._fb.user.isAnonymous){
+        window._fb.user.getIdToken().then(function(tok){
+          fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+window._fb.user.uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=parentalBlocked',{
+            method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+            body:JSON.stringify({fields:{parentalBlocked:{stringValue:JSON.stringify(_parentalState.blocked||{})}}})
+          });
+        });
+      }
+    }catch(e){}
   });
 }
 
@@ -18005,62 +18373,55 @@ function parentalEnableFlow(){
   var formArea=document.getElementById('parental-form-area');
   if(!formArea) return;
   formArea.innerHTML='<div style="margin-top:10px">'
-    +'<div style="font-size:12px;color:var(--text2);margin-bottom:10px">Set a PIN code and security question to protect these settings.</div>'
+    +'<div style="font-size:12px;color:var(--text2);margin-bottom:10px">Set a PIN to protect parental settings. You\'ll need it to change or disable them.</div>'
     +'<label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">PIN Code (4-8 digits)</label>'
-    +'<input id="pc-code" type="password" maxlength="8" placeholder="e.g. 1234" style="width:100%;padding:7px 9px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;margin-bottom:8px">'
-    +'<label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Security Question</label>'
-    +'<input id="pc-question" type="text" placeholder="e.g. My pet\'s name?" style="width:100%;padding:7px 9px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;margin-bottom:8px">'
-    +'<label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Answer</label>'
-    +'<input id="pc-answer" type="text" placeholder="Answer (case insensitive)" style="width:100%;padding:7px 9px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;margin-bottom:10px">'
+    +'<input id="pc-code" type="password" maxlength="8" placeholder="e.g. 1234" style="width:100%;padding:7px 9px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;margin-bottom:12px">'
     +'<button class="btn btn-primary" onclick="parentalConfirmEnable()" style="width:100%">&#128274; Enable</button>'
     +'</div>';
 }
 
 async function parentalConfirmEnable(){
-  var code=document.getElementById('pc-code')?.value||'';
-  var question=document.getElementById('pc-question')?.value?.trim()||'';
-  var answer=document.getElementById('pc-answer')?.value?.trim().toLowerCase()||'';
+  var codeEl=document.getElementById('pc-code');
+  var code=((codeEl&&codeEl.value)||'').trim();
   if(code.length<4){showToast('PIN must be at least 4 digits.');return;}
-  if(!question||!answer){showToast('Security question and answer required.');return;}
-  var hash=await _hashStr(code);
-  var aHash=await _hashStr(answer);
-  _parentalState={enabled:true,blocked:{},hash:hash,question:question,answerHash:aHash};
-  localStorage.setItem('c64_parental',JSON.stringify(_parentalState));
-  parentalApply();
-  document.getElementById('parental-modal')?.remove();
-  showToast('&#128274; Parental controls enabled!');
-  // Sync to Firebase immediately so admin can see it
-  try{
+  _hashStr(code).then(function(hash){
+    _parentalState={enabled:true,blocked:{},hash:hash,question:'',answerHash:''};
+    try{localStorage.setItem('c64_parental',JSON.stringify(_parentalState));}catch(e){}
+    // Apply page hiding WITHOUT triggering MutationObserver chain
+    var blocked={};
+    _PARENTAL_PAGES.forEach(function(pg){
+      document.querySelectorAll('.nav-dd-item[data-page="'+pg+'"]').forEach(function(n){
+        n.style.display=blocked[pg]?'none':'';
+      });
+    });
+    // Rebuild modal (disconnect observer first to prevent recursion)
+    if(window._parentalLinkObserver) window._parentalLinkObserver.disconnect();
+    parentalShowSetup();
+    // Reconnect observer after modal is built
+    setTimeout(function(){
+      if(window._parentalLinkObserver) window._parentalLinkObserver.observe(document.body,{childList:true,subtree:true});
+      if(typeof window._injectLinksRow==='function') window._injectLinksRow();
+    },400);
+    showToast('Parental controls enabled!');
     if(window._fb&&window._fb.user&&!window._fb.user.isAnonymous){
-      var tok=await window._fb.user.getIdToken();
-      await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+window._fb.user.uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=parentalEnabled&updateMask.fieldPaths=parentalBlocked',{
-        method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
-        body:JSON.stringify({fields:{parentalEnabled:{booleanValue:true},parentalBlocked:{stringValue:'{}'}}}),
+      window._fb.user.getIdToken().then(function(tok){
+        fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+window._fb.user.uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=parentalEnabled&updateMask.fieldPaths=parentalBlocked',{
+          method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+          body:JSON.stringify({fields:{parentalEnabled:{booleanValue:true},parentalBlocked:{stringValue:'{}'}}})
+        }).catch(function(){});
       });
     }
-  }catch(e){ console.warn('Parental sync error:',e); }
+  }).catch(function(e){showToast('Error: '+e.message);});
 }
-
 async function parentalDisablePrompt(){
   var code=prompt('Enter PIN to disable parental controls:');
   if(!code) return;
   var hash=await _hashStr(code);
-  if(hash!==_parentalState.hash){
-    // Try security question
-    var ans=prompt(_parentalState.question+'\n(Security question):');
-    if(!ans) return;
-    var aHash=await _hashStr(ans.trim().toLowerCase());
-    if(aHash!==_parentalState.answerHash){showToast('Incorrect PIN and security answer.');return;}
-  }
+  if(hash!==_parentalState.hash){showToast('Incorrect PIN.');return;}
   _parentalState=null;
   localStorage.removeItem('c64_parental');
   document.getElementById('parental-modal')?.remove();
-  // Restore nav items
-  _PARENTAL_PAGES.forEach(function(page){
-    document.querySelectorAll('.nav-dd-item[data-page="'+page+'"]').forEach(function(el){
-      el.style.display='';
-    });
-  });
+  parentalApply();
   showToast('&#128275; Parental controls disabled.');
 }
 
@@ -18225,89 +18586,113 @@ function admShowParentalPane(){
     if(b) b.classList.toggle('active',t==='parental');
     if(p) p.style.display=t==='parental'?'block':'none';
   });
+  // Auto-load parental users when tab opens
+  setTimeout(function(){
+    if(typeof admLoadParentalUsers==='function') admLoadParentalUsers();
+  },100);
 }
 
 async function admLoadParentalUsers(){
-  var el = document.getElementById('adm-parental-list');
+  var el=document.getElementById('adm-parental-list');
   if(!el) return;
-  el.innerHTML = '<div style="color:var(--text2)">Loading...</div>';
-  try{
-    // Use getAnalytics which is already authenticated via Firebase SDK
-    var analytics = await window._fb.getAnalytics();
-    var allUsers = analytics && analytics.users ? analytics.users : [];
-    // Filter to users who have parentalEnabled set
-    var users = allUsers.filter(function(u){ return u.parentalEnabled === true; }).map(function(u){
-      var blocked = {};
-      try{ blocked = JSON.parse(u.parentalBlocked||'{}'); }catch(e){}
-      return {uid:u.uid||u.id||'', name:u.displayName||u.email||'?', email:u.email||'', blocked:blocked};
+  el.innerHTML='<div style="color:var(--text2);font-size:12px">Loading users...</div>';
+  if(!window._fb||!window._fb.user) return;
+  window._fb.user.getIdToken().then(function(tok){
+    return fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&pageSize=200',{
+      headers:{Authorization:'Bearer '+tok}
     });
-    
-    if(!users.length){
-      el.innerHTML='<p style="color:var(--text2)">No users have parental controls enabled.</p>';
-      return;
-    }
-    
-    var labels={chat:'Messages',forums:'Forums',articles:'Articles',players:'Players',events:'Events'};
-    var html='';
-    users.forEach(function(u){
-      var blockedList=Object.keys(u.blocked).filter(function(k){return u.blocked[k];}).map(function(k){return labels[k]||k;});
-      var blockedStr=blockedList.length?'<span style="color:var(--red)">'+blockedList.join(', ')+'</span>':'<span style="color:var(--green)">None</span>';
-      html+='<div style="padding:9px;border-bottom:1px solid var(--border)">';
-      html+='<div style="font-weight:600;font-size:12px">'+u.name.replace(/</g,'&lt;')+'</div>';
-      html+='<div style="font-size:11px;color:var(--text2);margin-bottom:5px">'+u.email+'</div>';
-      html+='<div style="font-size:11px;margin-bottom:6px">Blocked: '+blockedStr+'</div>';
-      var safeUid=u.uid||''; var safeName=u.name.replace(/</g,'&lt;').replace(/"/g,'&quot;');
-      html+='<button class="btn btn-ghost btn-sm" style="font-size:10px;color:var(--red)" data-uid="'+safeUid+'" data-name="'+safeName+'" onclick="admResetParental(this.dataset.uid,this.dataset.name)">&#128275; Reset</button>';
-      html+='</div>';
+  }).then(function(r){return r.json();}).then(function(data){
+    var docs=data.documents||[];
+    var users=docs.map(function(d){
+      var f=d.fields||{};
+      var blocked={};
+      try{blocked=JSON.parse((f.parentalBlocked&&f.parentalBlocked.stringValue)||'{}');}catch(e){}
+      return {
+        uid:d.name.split('/').pop(),
+        name:(f.displayName&&f.displayName.stringValue)||(f.username&&f.username.stringValue)||(f.email&&f.email.stringValue)||d.name.split('/').pop(),
+        email:(f.email&&f.email.stringValue)||'',
+        blocked:blocked,
+        enabled:!!(f.parentalEnabled&&f.parentalEnabled.booleanValue)
+      };
     });
+    users.sort(function(a,b){return (b.enabled?1:0)-(a.enabled?1:0)||(a.name||'').localeCompare(b.name||'');});
+    if(!users.length){el.innerHTML='<p style="color:var(--text2);font-size:12px">No users found.</p>';return;}
+    var html='<div style="font-size:11px;color:var(--text2);margin-bottom:8px">'+users.length+' users - parental ON shown first</div>';
+    html+=users.map(function(u){
+      var bList=Object.keys(u.blocked).filter(function(k){return u.blocked[k];});
+      var sc=u.enabled?'#22c55e':'#64748b';
+      return '<div style="padding:8px 0;border-bottom:1px solid var(--border)">'
+        +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">'
+        +'<span style="flex:1;font-size:12px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+u.name+'</span>'
+        +'<span style="font-size:10px;font-weight:700;color:'+sc+';background:'+sc+'22;border-radius:4px;padding:1px 6px">'+(u.enabled?'ON':'OFF')+'</span>'
+        +'</div>'
+        +(u.email?'<div style="font-size:11px;color:var(--text2);margin-bottom:3px">'+u.email+'</div>':'')
+        +(u.enabled&&bList.length?'<div style="font-size:10px;color:var(--accent);margin-bottom:5px">Blocking: '+bList.join(', ')+'</div>':'')
+        +'<div style="display:flex;gap:5px;flex-wrap:wrap">'
+        +(u.enabled?'<button data-uid="'+u.uid+'" data-uname="'+u.name.replace(/"/g,'&quot;')+'" class="adm-pr-reset" style="padding:3px 9px;font-size:10px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#f87171;border-radius:5px;cursor:pointer">Reset/Disable</button>':'')
+        +'<button data-uid="'+u.uid+'" data-uname="'+u.name.replace(/"/g,'&quot;')+'" class="adm-pr-manage" style="padding:3px 9px;font-size:10px;background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.3);color:#60a5fa;border-radius:5px;cursor:pointer">Manage</button>'
+        +'</div></div>';
+    }).join('');
     el.innerHTML=html;
-  }catch(e){
-    el.innerHTML='<p style="color:var(--red)">'+e.message+'</p>';
-  }
+    el.querySelectorAll('.adm-pr-reset').forEach(function(b){b.onclick=function(){admResetParental(this.dataset.uid,this.dataset.uname);};});
+    el.querySelectorAll('.adm-pr-manage').forEach(function(b){b.onclick=function(){admManageParental(this.dataset.uid,this.dataset.uname);};});
+  }).catch(function(e){el.innerHTML='<p style="color:#ef4444;font-size:12px">Error: '+e.message+'</p>';});
 }
 
-async function admResetParental(uid, name){
-  if(!confirm('Reset parental controls for "'+name+'"? This will disable them.')) return;
-  try{
-    var tok = await window._fb.user.getIdToken();
-    // Read existing doc first to preserve other fields
-    var r = await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
-      headers:{'Authorization':'Bearer '+tok}
-    });
-    var existing = await r.json();
-    var fields = existing.fields||{};
-    fields.parentalEnabled = {booleanValue:false};
-    fields.parentalBlocked = {stringValue:'{}'};
-    fields.parentalResetByAdmin = {booleanValue:true};
-    fields.parentalHash = {stringValue:''};
-    await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{
-      method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
-      body:JSON.stringify({fields:fields})
-    });
-    showToast('\u2705 Parental controls reset for '+name+'. They will see this on next load.');
-    admLoadParentalUsers();
-  }catch(e){ showToast('Error: '+e.message); }
-}
-
-// ── PARENTAL: sync enabled state to Firebase so admin can see it ──
+function admManageParental(uid,name){
+  var pages=(typeof _PARENTAL_PAGES!=='undefined'?_PARENTAL_PAGES:['chat','forums','articles','players','events','music','tilted','feedback','bookreviews']).filter(function(p){return p&&p!=='undefined';});
+  var labels={chat:'Messages/Chat',forums:'Forums',articles:'Articles',players:'Players',events:'Events',music:'Music Player',feedback:'Feedback Page',bookreviews:'Book Reviews',tilted:'Tilted? (Games)'};
+  // Fetch current state first
+  window._fb.user.getIdToken().then(function(tok){
+    return fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q',{headers:{Authorization:'Bearer '+tok}});
+  }).then(function(r){return r.json();}).then(function(data){
+    var f=data.fields||{};
+    var curEnabled=!!(f.parentalEnabled&&f.parentalEnabled.booleanValue);
+    var curBlocked={};
+    try{curBlocked=JSON.parse((f.parentalBlocked&&f.parentalBlocked.stringValue)||'{}');}catch(e){}
+    var modal=document.createElement('div');
+    modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+    var rows=pages.map(function(page){
+      var checked=curBlocked[page]?'checked':'';
+      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)">'
+        +'<span style="font-size:13px">'+(labels[page]||page)+'</span>'
+        +'<input type="checkbox" class="amp-cb" data-page="'+page+'" '+checked+' style="width:18px;height:18px;cursor:pointer">'
+        +'</div>';
+    }).join('');
+    modal.innerHTML='<div style="background:var(--card);border-radius:14px;padding:22px;max-width:380px;width:100%;max-height:88vh;overflow-y:auto">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+      +'<h3 style="margin:0;font-size:15px">Parental: '+name+'</h3>'
+      +'<button id="amp-x" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer">&#10005;</button>'
+      +'</div>'
+      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
+      +'<span style="font-size:13px">Parental Controls On</span>'
+      +'<input type="checkbox" id="amp-master" '+(curEnabled?'checked':'')+' style="width:18px;height:18px;cursor:pointer">'
+      +'</div>'
+      +rows
+      +'<div style="display:flex;gap:8px;margin-top:14px">'
+      +'<button id="amp-save" class="btn btn-primary btn-sm" style="flex:1">Save</button>'
+      +'<button id="amp-cancel" class="btn btn-ghost btn-sm" style="flex:1">Cancel</button>'
+      +'</div></div>';
+    document.body.appendChild(modal);
+    modal.querySelector('#amp-x').onclick=function(){modal.remove();};
+    modal.querySelector('#amp-cancel').onclick=function(){modal.remove();};
+    modal.querySelector('#amp-save').onclick=function(){
+      var enabled=modal.querySelector('#amp-master').checked;
+      var newBlocked={};
+      modal.querySelectorAll('.amp-cb').forEach(function(cb){if(cb.checked)newBlocked[cb.dataset.page]=true;});
+      var sb=modal.querySelector('#amp-save');sb.disabled=true;sb.textContent='Saving...';
+      window._fb.user.getIdToken().then(function(tok){
+        return fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=parentalEnabled&updateMask.fieldPaths=parentalBlocked',{
+          method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+          body:JSON.stringify({fields:{parentalEnabled:{booleanValue:enabled},parentalBlocked:{stringValue:JSON.stringify(newBlocked)}}})
+        });
+      }).then(function(){
+        showToast('Saved for '+name);modal.remove();admLoadParentalUsers();
+      }).catch(function(e){sb.disabled=false;sb.textContent='Save';showToast('Error: '+e.message);});
+    };
+  }).catch(function(e){showToast('Error loading user: '+e.message);});
+}// ── PARENTAL: sync enabled state to Firebase so admin can see it ──
 // Patch parentalConfirmEnable and parentalDisablePrompt
-var _origConfirmEnable = window.parentalConfirmEnable;
-window.parentalConfirmEnable = async function(){
-  if(_origConfirmEnable) await _origConfirmEnable();
-  // After enabling, sync to Firebase
-  try{
-    if(!window._fb||!window._fb.user||window._fb.user.isAnonymous) return;
-    var tok = await window._fb.user.getIdToken();
-    var state = _parentalState||{};
-    await fetch('https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+window._fb.user.uid+'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q&updateMask.fieldPaths=parentalEnabled&updateMask.fieldPaths=parentalBlocked',{
-      method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
-      body:JSON.stringify({fields:{
-        parentalEnabled:{booleanValue:true},
-        parentalBlocked:{stringValue:JSON.stringify(state.blocked||{})}
-      }})
-    });
-  }catch(e){}
-};
 
 // ── ADMIN: refresh stats after fbLoadAdminUsers ───────────────────
 // The getAnalytics already reads stats from Firebase, but we need 
@@ -18357,48 +18742,29 @@ function admFilterUsers(q){
   });
 }
 
-</script>
 
-
-<script>
-/* ══════════════════════════════════════════════════════════════
-   CHESS64 — Chat delete (user-side only, admin keeps copy)
-   ══════════════════════════════════════════════════════════════ */
-
-// Delete a chat conversation ON USER'S SIDE ONLY
-// We don't delete from Firestore - just mark it hidden for this user
-// Admin can still view all chats
-async function chatDeleteForMe(convId){
-  if(!convId) return;
-  if(!confirm('Delete this conversation? It will be removed from your view but admin can still see it.')) return;
-  try{
-    var uid = window._fb&&window._fb.user ? window._fb.user.uid : null;
-    if(!uid) return;
-    // Store hidden list in localStorage (instant, no auth needed)
-    var storageKey = 'c64_hidden_chats_' + uid;
-    var hiddenList = [];
-    try{ hiddenList = JSON.parse(localStorage.getItem(storageKey)||'[]'); }catch(e){}
-    if(!hiddenList.includes(convId)) hiddenList.push(convId);
-    localStorage.setItem(storageKey, JSON.stringify(hiddenList));
-    window._hiddenChats = hiddenList;
-    // Clear the UI
-    _chatCurrentId = null;
-    var inp = document.getElementById('msg-input-bar');
-    if(inp){ inp.style.visibility='hidden'; }
-    var title = document.getElementById('chat-title');
-    if(title) title.textContent = 'Select a conversation';
-    var msgs = document.getElementById('chat-msgs');
-    if(msgs) msgs.innerHTML = '<div style="text-align:center;color:var(--text2);font-size:13px;margin-top:40px">Select or start a conversation</div>';
-    var delBtn = document.getElementById('chat-delete-btn');
-    if(delBtn) delBtn.style.display='none';
-    var rb = document.getElementById('chat-report-btn');
-    if(rb) rb.style.display='none';
-    showToast('Conversation removed from your view.');
-    // Reload conversation list (without the deleted one)
-    chatLoadConvList();
-  }catch(e){ showToast('Error: '+e.message); }
+async function admResetParental(uid,name){
+  if(!confirm('Reset parental controls for "'+name+'"?')) return;
+  window._fb.user.getIdToken().then(function(tok){
+    var url='https://firestore.googleapis.com/v1/projects/chess64-e847c/databases/(default)/documents/users/'+uid
+      +'?key=AIzaSyACFKjSW5ccUVlxEEMY2QPeCgrViNBJF9Q'
+      +'&updateMask.fieldPaths=parentalEnabled&updateMask.fieldPaths=parentalBlocked'
+      +'&updateMask.fieldPaths=parentalResetByAdmin&updateMask.fieldPaths=parentalHash';
+    fetch(url,{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+      body:JSON.stringify({fields:{
+        parentalEnabled:{booleanValue:false},
+        parentalBlocked:{stringValue:'{}'},
+        parentalResetByAdmin:{booleanValue:true},
+        parentalHash:{stringValue:''}
+      }})
+    }).then(function(){
+      showToast('Reset done for '+name+'. They see it on next login.');
+      admLoadParentalUsers();
+    }).catch(function(e){showToast('Fetch error: '+e.message);});
+  }).catch(function(e){showToast('Auth error: '+e.message);});
 }
-
 // Patch chatLoadConvList to filter out hidden conversations
 (function(){
   var _orig = window.chatLoadConvList;
@@ -19692,8 +20058,12 @@ async function showLichessPlayer(username){
       +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:7px;margin-bottom:12px">'+ratingsHtml+'</div>'
       +'<div style="display:flex;gap:7px;flex-wrap:wrap">'
       +'<a href="https://lichess.org/@/'+u.username+'" target="_blank" data-parental-link="lichess.org" class="btn btn-ghost btn-sm">&#128279; Lichess Profile</a>'
-      +'<button class="btn btn-ghost btn-sm" data-uid="'+u.username+'" onclick="analyzeLichessAccount(this.dataset.uid)">&#128200; Analyze Account</button>'
+      +'<button class="btn btn-ghost btn-sm" data-uid="'+u.username+'" onclick="analyzeLichessAccount(this.dataset.uid)">&#128202; Analyze Account</button>'
+      +'<button class="btn btn-ghost btn-sm" data-uid="'+u.username+'" onclick="lichessFullAnalysis(this.dataset.uid)" style="background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none">&#128200; Full Game History</button>'
+      +'<button class="btn btn-ghost btn-sm" data-uid="'+u.username+'" onclick="lichessOpeningAnalysis(this.dataset.uid)" style="background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none">&#9822; Opening Analysis</button>'
       +'</div>'
+      +'<div id="li-full-analysis" style="margin-top:4px"></div>'
+      +'<div id="li-opening-analysis" style="margin-top:4px"></div>'
       +'<div id="li-player-games" style="margin-top:12px"></div>'
       +'</div>';
   }catch(e){
@@ -21731,37 +22101,45 @@ function parentalUnblockLinks(){
 
 // Patch parentalShowSetup to add links toggle with note
 (function(){
-  var _orig=window.parentalShowSetup;
-  window.parentalShowSetup=function(){
-    if(_orig) _orig();
-    // Add links toggle to the modal if not already there
+  var _origSetup=window.parentalShowSetup||function(){};
+  function _injectLinksRow(){
     setTimeout(function(){
       var modal=document.getElementById('parental-modal');
       if(!modal) return;
       if(modal.querySelector('[data-parental-links-row]')) return;
       var state=_parentalState||{enabled:false,blocked:{}};
+      if(!state.enabled) return; // Only show when parental is enabled
       var blocked=state.blocked||{};
       var isBlocked=blocked['links']?true:false;
       var row=document.createElement('div');
       row.dataset.parentalLinksRow='1';
       row.style.cssText='padding:10px 0;border-bottom:1px solid var(--border)';
-      row.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
+      var toggleBg=isBlocked?'var(--accent)':'#555';
+      var knobPos=isBlocked?'left:18px':'left:2px';
+      row.innerHTML=
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
         +'<span style="font-size:13px">&#128279; Disable External Links</span>'
-        +'<div style="width:36px;height:20px;border-radius:10px;background:'+(isBlocked?'var(--accent)':'#555')+';position:relative;cursor:pointer"'
+        +'<div id="ptog-links" style="width:36px;height:20px;border-radius:10px;background:'+toggleBg+';cursor:pointer;position:relative;transition:background .2s"'
         +' onclick="parentalTogglePage(\'links\',this)" data-page="links">'
-        +'<div style="position:absolute;top:2px;'+(isBlocked?'left:18px':'left:2px')+';width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s"></div>'
+        +'<div style="position:absolute;top:2px;'+knobPos+';width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s"></div>'
         +'</div></div>'
-        +'<div style="font-size:11px;color:var(--text2);background:var(--bg3);border-radius:6px;padding:8px">'
-        +'<b>Note:</b> When enabled, links to Chess.com, Lichess, Apple Music, Stockfish, 2700chess.com, Wikipedia, Firebase, and all external links in articles, forums, and user profiles will be disabled. '
-        +'However, we encourage supporting these amazing services — they power many features of Chess64. '
-        +'Please visit <b>Chess.com</b>, <b>Lichess.org</b>, <b>Apple Music</b>, and <b>Stockfish</b> directly.'
+        +'<div style="font-size:11px;color:var(--text2);background:var(--bg3);border-radius:6px;padding:10px;line-height:1.6">'
+        +'<b>&#128276; Note:</b> When enabled, links to Chess.com, Lichess, Apple Music, Stockfish, 2700chess.com, Wikipedia, Firebase, '
+        +'and all external links in articles, forums, and user profiles will be disabled.<br>'
+        +'<span style="opacity:.8">However, we encourage supporting these amazing services — they power many features of Chess64. '
+        +'Please visit <b>Chess.com</b>, <b>Lichess.org</b>, <b>Apple Music</b>, and <b>Stockfish</b> directly.</span>'
         +'</div>';
-      // Insert before the form area
       var formArea=modal.querySelector('#parental-form-area');
       if(formArea) formArea.parentNode.insertBefore(row,formArea);
       else modal.querySelector('div').appendChild(row);
-    },100);
-  };
+    },150);
+  }
+  // Hook into parentalShowSetup
+  var _orig=window.parentalShowSetup;
+  if(_orig){
+    window.parentalShowSetup=function(){_orig();_injectLinksRow();};
+  }
+  window._injectLinksRow=_injectLinksRow;
 })();
 </script>
 
@@ -28318,7 +28696,85 @@ function crManualHide(){var m=document.getElementById('cr-manual');if(m)m.style.
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
-</body></html><!-- Chess64 3D game JS removed for rebuild - using simplified version -->
+
+<script id="site-tour-script">
+/* ══ Chess64 Site Tour ══════════════════════════════════════════════ */
+(function(){
+var _tour=null;
+var STEPS=[
+  {page:"home",title:"Welcome to Chess64!",body:"Chess64 is your all-in-one chess platform - play against bots, analyze games, solve puzzles, read articles, and even run in a city. Let us take a quick tour of everything."},
+  {page:"play",title:"Play Chess",body:"Challenge our AI bot at 20 difficulty levels. Choose your side, pick a playing style like Aggressive, Defensive, or Tal-inspired, and play full games with move history and captures."},
+  {page:"analyze",title:"Analysis Board",body:"Set up any position and let Stockfish analyze it. Get computer evaluations, see the best move highlighted, and explore variations. Perfect for studying openings or reviewing your games."},
+  {page:"puzzles",title:"Puzzles",body:"Sharpen your tactics with hand-picked chess puzzles. Each puzzle has a theme like fork, pin, or skewer and a rating. Solve them to level up your chess intuition!"},
+  {page:"articles",title:"Articles",body:"Read chess articles written by our bloggers. Bloggers can embed live interactive chess boards right inside articles - you can play out the moves as you read. Apply to become a blogger from this page."},
+  {page:"bookreviews",title:"Book Reviews",body:"Our bloggers review chess books - openings, endgame manuals, biographies. Leave comments, see star ratings, and discover your next read. Bloggers can embed chess boards in reviews too!"},
+  {page:"tilted",title:"Tilted Games",body:"Take a break from chess! Play Super Mario Ultra Deluxe with arrow keys and F to fire, or City Dash 3D - a subway-surfer style runner with 3D environments, power-ups, tunnels, bridges, and 8 characters!"},
+  {page:"chess3d",title:"Chess64 3D",body:"Experience chess in beautiful 3D. Drag to rotate the camera, scroll to zoom, click a piece then a square to move. Choose from 6 board themes, 5 piece styles, 5 backgrounds, glare colors, and play vs the bot!"},
+  {page:"gm-games",title:"GM Games",body:"Replay legendary grandmaster games move by move. Study how the world best chess players think - from classical Morphy games to modern Carlsen masterpieces."},
+  {page:"players",title:"Players",body:"See the Chess64 leaderboard, browse player profiles, view their game history and stats. Challenge any player or send them a message."},
+  {page:"settings",title:"Settings",body:"Customize your Chess64 experience - change themes, set your username, manage parental controls for account or local device, adjust the music player, and much more."},
+  {page:"home",title:"You are all set!",body:"That is Chess64! Every feature is designed to make chess more fun, beautiful, and accessible. Use the arrow keys to navigate the tour, or press Escape to close. Enjoy playing!"}
+];
+var _step=0;
+
+function renderTour(){
+  var existing=document.getElementById('c64-tour-overlay');
+  if(existing) existing.remove();
+  if(!_tour) return;
+  var step=STEPS[_step];
+  var overlay=document.createElement('div');
+  overlay.id='c64-tour-overlay';
+  overlay.style.cssText='position:fixed;inset:0;z-index:99999;pointer-events:none';
+  var card=document.createElement('div');
+  card.style.cssText='position:fixed;bottom:32px;left:50%;transform:translateX(-50%);width:min(520px,92vw);background:linear-gradient(135deg,#0f172a,#1e1b4b);border:1px solid rgba(139,92,246,.4);border-radius:16px;padding:22px 24px;box-shadow:0 20px 60px rgba(0,0,0,.7);pointer-events:auto;z-index:99999';
+  var prog=Math.round((_step/(_steps||STEPS.length-1))*100);
+  card.innerHTML='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">'
+    +'<div style="font-size:18px;font-weight:800;color:#e2e8f0">'+step.title+'</div>'
+    +'<button onclick="stopSiteTour()" style="background:transparent;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.5);border-radius:6px;padding:3px 10px;cursor:pointer;font-size:12px">✕ Close</button>'
+    +'</div>'
+    +'<p style="color:#cbd5e1;font-size:13px;line-height:1.65;margin:0 0 16px">'+step.body+'</p>'
+    +'<div style="background:rgba(255,255,255,.08);border-radius:4px;height:4px;margin-bottom:14px">'
+    +'<div style="background:linear-gradient(90deg,#7c3aed,#3b82f6);height:100%;border-radius:4px;width:'+Math.round((_step/(STEPS.length-1))*100)+'%;transition:width .4s"></div>'
+    +'</div>'
+    +'<div style="display:flex;justify-content:space-between;align-items:center">'
+    +'<span style="font-size:11px;color:rgba(255,255,255,.4)">Step '+(_step+1)+' of '+STEPS.length+'</span>'
+    +'<div style="display:flex;gap:8px">'
+    +(_step>0?'<button onclick="prevTourStep()" style="padding:7px 16px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:white;border-radius:8px;cursor:pointer;font-size:12px">← Back</button>':'')
+    +(_step<STEPS.length-1?'<button onclick="nextTourStep()" style="padding:7px 18px;background:linear-gradient(135deg,#7c3aed,#3b82f6);border:none;color:white;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">Next →</button>':'<button onclick="stopSiteTour()" style="padding:7px 18px;background:linear-gradient(135deg,#22c55e,#16a34a);border:none;color:white;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">🎉 Done!</button>')
+    +'</div></div>';
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  // Navigate to the page
+  if(step.page&&typeof navTo==='function') navTo(step.page);
+  // Small scroll to top
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+window.startSiteTour=function(){
+  _tour=true; _step=0; renderTour();
+};
+window.stopSiteTour=function(){
+  _tour=null;
+  var el=document.getElementById('c64-tour-overlay');
+  if(el) el.remove();
+};
+window.nextTourStep=function(){
+  if(_step<STEPS.length-1){_step++;renderTour();}
+};
+window.prevTourStep=function(){
+  if(_step>0){_step--;renderTour();}
+};
+// Keyboard navigation
+document.addEventListener('keydown',function(e){
+  if(!_tour) return;
+  if(e.key==='ArrowRight'||e.key==='ArrowDown') window.nextTourStep();
+  if(e.key==='ArrowLeft'||e.key==='ArrowUp') window.prevTourStep();
+  if(e.key==='Escape') window.stopSiteTour();
+});
+})();
+</script>
+
+<!-- Chess64 3D game JS removed for rebuild - using simplified version -->
 <script id="chess3d-game-script">
 (function(){
 'use strict';
@@ -28521,3 +28977,101 @@ function init(){
 window.chess3dInit=function(){if(C3.started)return;C3.started=true;init();};
 })();
 </script>
+
+<script id="chess64-tour-script">
+(function(){
+'use strict';
+var _steps=[
+  {page:'home',icon:'',title:'Welcome to Chess64',body:'Chess64 is your all-in-one chess platform. Play, analyze, train, explore openings, read articles, listen to music, and even play chess in 3D. Let us take a quick tour of everything it has to offer!'},
+  {page:'play',icon:'',title:'Play Chess',body:'Challenge our AI at 20 difficulty levels -- from absolute beginner to 3300+ Elo grandmaster strength. Pick your color, choose a level, and play. Games are saved to your account!'},
+  {page:'analysis',icon:'',title:'Analysis Board',body:'Paste any PGN or FEN and let Stockfish -- one of the strongest engines ever built -- analyze every move for you. Perfect for reviewing your games and finding where things went wrong.'},
+  {page:'puzzles',icon:'',title:'Tactical Puzzles',body:'Sharpen your tactics with hundreds of rated puzzles. Your rating is saved to localStorage and updates after every puzzle -- get it right and your rating goes up, miss it and it drops. Daily practice here is the fastest way to improve!'},
+  {page:'openings',icon:'',title:'Opening Explorer',body:'Explore chess openings with our interactive board. The Explorer tab shows move trees, the Database tab lets you query master games by position, and the Theory tab explains the ideas behind each line.'},
+  {page:'learn',icon:'',title:'Lessons and Game Principles',body:'The Learn page covers chess fundamentals -- tactical patterns, strategic principles, and positional ideas. The Principles tab has structured lessons on key concepts every improving player should know.'},
+  {page:'learn',icon:'',title:'Opening Repertoire Trainer',body:'Inside the Learn page, the Repertoire tab lets you build and drill your own opening repertoire. Practice your lines until they become automatic -- no more blanking in the opening!'},
+  {page:'learn',icon:'',title:'Study Builder',body:'The Opening Study tab inside Learn lets you create and browse chess studies. Build annotated positions, add comments, and organize your research. Community studies are shared by other Chess64 users.'},
+  {page:'coords',icon:'',title:'Coordinates Trainer',body:'Speed-train your board vision. The coordinates trainer fires off random square names and you click as fast as you can. Mastering coordinates is a foundational skill for reading chess notation and studying positions.'},
+  {page:'players',icon:'',title:'Player Lookup and Account Analysis',body:'The Players page lets you search for any Chess.com or Lichess player by username to see their stats and ratings. You can also pull your games from Chess.com directly into the Analysis Board!'},
+  {page:'events',icon:'',title:'Events and Tournaments',body:'Track upcoming chess events and tournaments. We give a special shout-out to Lichess and Chess.com -- two incredible free platforms that inspire everything we do here at Chess64!'},
+  {page:'articles',icon:'',title:'Articles',body:'Read chess articles written by our community bloggers -- openings, endgames, strategy, and news. Articles can include interactive chess boards embedded right inside the text!'},
+  {page:'bookreviews',icon:'',title:'Book Reviews',body:'Chess book reviews from our community. Bloggers share star ratings and in-depth thoughts on chess literature, complete with comments and inline chess positions from the books themselves.'},
+  {page:'tilted',icon:'',title:'Tilted? Games',body:'Need a break from chess? Play Super Mario Ultra Deluxe -- a full 7-world platformer -- or City Dash, our 3D subway-surfer runner complete with multiple characters, obstacle styles, and environment zones!'},
+  {page:'chess3d',icon:'',title:'Chess64 3D',body:'Experience chess in stunning 3D! Drag to orbit the camera, scroll to zoom. Choose from 6 board themes, 5 piece styles, and 5 backgrounds. You can even play against the Stockfish engine in full 3D!'},
+  {page:'home',icon:'music',title:'Music Player',body:'Chess64 has a built-in music player! Hit the music icon at the bottom of the screen to open it. Create named playlists, add your favorite tracks, and enjoy music while you study or play.'},
+  {page:'home',icon:'',title:'You Are All Set!',body:'That is the full Chess64 tour! Use the navigation menu at the top to explore any section. Sign in to save your progress across devices, track your puzzle rating, and join our community. Good luck at the board!'},
+];var _idx=0,_el=null;
+function mkOverlay(){
+  if(_el) _el.remove();
+  _el=document.createElement('div');
+  _el.id='c64-tour-root';
+  _el.style.cssText='position:fixed;inset:0;z-index:99999;pointer-events:none';
+  document.body.appendChild(_el);
+}
+function render(){
+  if(!_el) mkOverlay();
+  var step=_steps[_idx];
+  var isLast=(_idx===_steps.length-1);
+  var pct=Math.round((_idx+1)/_steps.length*100);
+  _el.innerHTML='';
+  var bg=document.createElement('div');
+  bg.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,.4);pointer-events:auto';
+  bg.onclick=function(e){if(e.target===bg)tourEnd();};
+  _el.appendChild(bg);
+  var card=document.createElement('div');
+  card.style.cssText=[
+    'position:absolute;bottom:24px;left:50%;transform:translateX(-50%)',
+    'width:min(95vw,500px)',
+    'background:rgba(15,23,42,.97)',
+    'border:1px solid rgba(251,191,36,.5)',
+    'border-radius:16px',
+    'padding:22px 24px 18px',
+    'box-shadow:0 20px 60px rgba(0,0,0,.5)',
+    'pointer-events:auto'
+  ].join(';');
+  card.innerHTML=
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
+    +'<div><span style="font-size:10px;font-weight:700;color:#fbbf24;background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.3);border-radius:20px;padding:2px 8px">'+(_idx+1)+' / '+_steps.length+'</span>'
+    +'<div style="font-size:17px;font-weight:800;color:#f1f5f9;margin-top:6px">'+step.title+'</div></div>'
+    +'<button id="t-close" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#94a3b8;font-size:14px;cursor:pointer;border-radius:8px;padding:3px 10px;line-height:1.4">&#10005;</button>'
+    +'</div>'
+    +'<p style="color:#94a3b8;font-size:13px;line-height:1.75;margin:0 0 16px">'+step.body+'</p>'
+    +'<div style="background:#1e293b;border-radius:99px;height:3px;margin-bottom:14px"><div style="height:3px;border-radius:99px;background:linear-gradient(90deg,#fbbf24,#8b5cf6);width:'+pct+'%;transition:width .4s ease"></div></div>'
+    +'<div style="display:flex;align-items:center;justify-content:flex-end;gap:8px">'
+    +(_idx>0?'<button id="t-prev" style="padding:7px 16px;border-radius:8px;border:1px solid #334155;background:transparent;color:#94a3b8;cursor:pointer;font-size:13px">&#8592; Back</button>':'')
+    +'<button id="t-next" style="padding:7px 22px;border-radius:8px;border:none;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;font-weight:700;cursor:pointer;font-size:13px">'
+    +(isLast?'Finish &#127937;':'Next &#8594;')
+    +'</button></div>';
+  _el.appendChild(card);
+  card.querySelector('#t-close').onclick=tourEnd;
+  var tn=card.querySelector('#t-next');if(tn) tn.onclick=isLast?tourEnd:tourNext;
+  var tp=card.querySelector('#t-prev');if(tp) tp.onclick=tourPrev;
+}
+var _goSeq=0;
+function go(idx){
+  _idx=Math.max(0,Math.min(_steps.length-1,idx));
+  var step=_steps[_idx];
+  var seq=++_goSeq;
+  if(step.icon==='music'){
+    navTo('home');
+    setTimeout(function(){
+      if(seq!==_goSeq) return;
+      var trigger=document.getElementById('c64-music-trigger');
+      if(trigger) trigger.click();
+      render();
+    },350);
+    return;
+  }
+  navTo(step.page);
+  setTimeout(function(){
+    if(seq!==_goSeq) return; // Discard stale renders
+    render();
+  },280);
+}
+function tourNext(){if(_idx<_steps.length-1){go(_idx+1);}else{tourEnd();}}
+function tourPrev(){if(_idx>0) go(_idx-1);}
+function tourEnd(){if(_el){_el.remove();_el=null;}}
+window.startTour=function(){_idx=0;mkOverlay();go(0);};
+window.tourEnd=tourEnd;
+})();
+</script>
+</body></html>
